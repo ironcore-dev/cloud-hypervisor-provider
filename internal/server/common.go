@@ -10,6 +10,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
+//nolint:unparam
 func (s *Server) loggerFrom(ctx context.Context, keysWithValues ...interface{}) logr.Logger {
 	return ctrl.LoggerFrom(ctx, keysWithValues...)
 }

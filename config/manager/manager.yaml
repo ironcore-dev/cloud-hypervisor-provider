@@ -1,0 +1,183 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    control-plane: controller-manager
+    app.kubernetes.io/name: cloud-hypervisor-provider
+    app.kubernetes.io/managed-by: kustomize
+  name: system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: controller-manager
+  namespace: system
+  labels:
+    control-plane: controller-manager
+    app.kubernetes.io/name: cloud-hypervisor-provider
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+      app.kubernetes.io/name: cloud-hypervisor-provider
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        control-plane: controller-manager
+        app.kubernetes.io/name: cloud-hypervisor-provider
+    spec:
+      # TODO(user): Uncomment the following code to configure the nodeAffinity expression
+      # according to the platforms which are supported by your solution.
+      # It is considered best practice to support multiple architectures. You can
+      # build your manager image using the makefile target docker-buildx.
+      # affinity:
+      #   nodeAffinity:
+      #     requiredDuringSchedulingIgnoredDuringExecution:
+      #       nodeSelectorTerms:
+      #         - matchExpressions:
+      #           - key: kubernetes.io/arch
+      #             operator: In
+      #             values:
+      #               - amd64
+      #               - arm64
+      #               - ppc64le
+      #               - s390x
+      #           - key: kubernetes.io/os
+      #             operator: In
+      #             values:
+      #               - linux
+      securityContext:
+        # Projects are configured by default to adhere to the "restricted" Pod Security Standards.
+        # This ensures that deployments meet the highest security requirements for Kubernetes.
+        # For more details, see: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: prepare-host
+          image: ubuntu
+          securityContext:
+            privileged: true
+          command: [ '/bin/bash', '-c' ]
+          env:
+            - name: DEPENDENCIES
+              value: "ceph-common qemu-utils"
+            - name: CH_FILENAME
+              value: cloud-hypervisor-static
+            - name: FW_FILENAME
+              value: hypervisor-fw
+            - name: CH_VERSION
+              value: v40.0
+            - name: FW_VERSION
+              value: 0.4.2
+          args:
+            - |
+              IFS=' ' read -r -a dependencies <<< "$DEPENDENCIES"
+              for dependency in "${dependencies[@]}"; do
+                if ! dpkg --root=/host-root --get-selections | grep -E "^${dependency}\s+install$" -q; then
+                  echo "Error: $dependency is not installed."
+                  exit 1
+                fi
+              done
+              
+              # Check if the cloud-hypervisor file exists in /opt
+              if [ ! -f "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)" ]; then
+                mkdir -p "/opt/cloud-hypervisor/$(CH_VERSION)"
+                curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/$(CH_VERSION)/$(CH_FILENAME)" -o "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)"
+                chmod a+x "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)"
+              else
+                echo "Cloud Hypervisor file already exists, skipping download."
+              fi
+                
+              # Check if the rust-hypervisor-firmware file exists in /opt
+              if [ ! -f "/opt/rust-hypervisor-firmware/$(FW_VERSION)/$(FW_FILENAME)" ]; then
+                mkdir -p "/opt/rust-hypervisor-firmware/$(FW_VERSION)"
+                curl -L "https://github.com/cloud-hypervisor/rust-hypervisor-firmware/releases/download/$(FW_VERSION)/$(FW_FILENAME)" -o "/opt/rust-hypervisor-firmware/$(FW_VERSION)/$(FW_FILENAME)"
+              else
+                echo "Rust Hypervisor Firmware file already exists, skipping download."
+              fi
+          volumeMounts:
+            - name: etc
+              mountPath: /etc
+            - name: libvirt-provider
+              mountPath: /var/lib/libvirt-provider
+            - name: host-dpkg
+              mountPath: /host-root/var/lib/dpkg
+              readOnly: true
+      containers:
+        - command:
+            - /machinepoollet
+          args:
+            - --leader-elect
+          image: machinepoollet:latest
+          name: manager
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            allowPrivilegeEscalation: false
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 100m
+              memory: 30Mi
+            requests:
+              cpu: 100m
+              memory: 20Mi
+          volumeMounts:
+            - mountPath: /var/run
+              name: var-run
+        - command:
+            - /cloud-hypervisor-provider
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          image: cloud-hypervisor-provider:latest
+          name: provider
+          securityContext:
+            privileged: true
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8181
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 100m
+              memory: 30Mi
+            requests:
+              cpu: 100m
+              memory: 20Mi
+          volumeMounts:
+            - name: var-run
+              mountPath: /var/run
+      volumes:
+        - name: var-run
+          emptyDir: { }
+      serviceAccountName: controller-manager
+      terminationGracePeriodSeconds: 10

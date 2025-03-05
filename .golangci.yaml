@@ -1,34 +1,47 @@
 run:
-  concurrency: 4
-  timeout: 10m
-
-linters:
-  enable:
-    - revive
-    - ginkgolinter
-    - ineffassign
-    - misspell
-    - goimports
-    - importas
-    - unused
-
-severity:
-  default-severity: error
-
-linters-settings:
-  misspell:
-    ignore-words:
-      - strat
-      - iritable
-  revive:
-    severity: error
-    rules:
-      - name: exported
-        arguments:
-          - disableStutteringCheck
-      - name: if-return
-        disabled: true
+  timeout: 5m
+  allow-parallel-runners: true
 
 issues:
-  exclude: # Exclude stutter issues (for now)
-    - "exported: type name will be used as (.+) by other packages, and that stutters; consider calling this (.+)"
+  # don't skip warning about doc comments
+  # don't exclude the default set of lint
+  exclude-use-default: false
+  # restore some of the defaults
+  # (fill in the rest as needed)
+  exclude-rules:
+    - path: "api/*"
+      linters:
+        - lll
+    - path: "internal/*"
+      linters:
+        - dupl
+        - lll
+linters:
+  disable-all: true
+  enable:
+    - dupl
+    - errcheck
+    - copyloopvar
+    - ginkgolinter
+    - goconst
+    - gocyclo
+    - gofmt
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - prealloc
+    - revive
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+
+linters-settings:
+  revive:
+    rules:
+      - name: comment-spacings
