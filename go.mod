@@ -8,7 +8,7 @@ require (
 	github.com/ironcore-dev/ironcore v0.2.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.6
-	golang.org/x/sync v0.11.0
+	golang.org/x/sync v0.12.0
 	google.golang.org/grpc v1.70.0
 	sigs.k8s.io/controller-runtime v0.20.1
 )
