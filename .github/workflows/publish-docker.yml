@@ -65,10 +65,12 @@ jobs:
       - name: Cache Go modules and build artifacts
         uses: actions/cache@v4
         with:
-          path: ~/.cache/go-build
-          key: ${{ runner.os }}-go-mod-${{ hashFiles('**/go.mod', '**/go.sum') }}
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-mod-
+            ${{ runner.os }}-go-
       - name: Build and push
         timeout-minutes: 40
         uses: docker/build-push-action@v6

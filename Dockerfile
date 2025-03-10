@@ -2,6 +2,8 @@
 FROM --platform=$BUILDPLATFORM golang:1.23 AS builder
 ARG TARGETOS
 ARG TARGETARCH
+ARG BUILDPLATFORM
+ENV BUILDARCH=${BUILDPLATFORM##*/}
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -18,20 +20,34 @@ COPY internal/ internal/
 
 RUN mkdir bin
 
-FROM builder AS cloud-hypervisor-provider-builder
-
+# Build the cloud-hypervisor-provider
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GO111MODULE=on  \
     go build -ldflags="-s -w" -a -o bin/cloud-hypervisor-provider ./cmd/cloud-hypervisor-provider/main.go
 
+# Install irictl-machine
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GO111MODULE=on \
+    go install github.com/ironcore-dev/ironcore/irictl-machine/cmd/irictl-machine@main
+
+# Ensure the binary is in a common location
+RUN if [ "$TARGETARCH" = "$BUILDARCH" ]; then \
+        mv /go/bin/irictl-machine /workspace/bin/irictl-machine; \
+    else \
+        mv /go/bin/linux_$TARGETARCH/irictl-machine /workspace/bin/irictl-machine; \
+    fi
+
+
 # Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM debian:bullseye-slim AS cloud-hypervisor-provider
 WORKDIR /
-COPY --from=cloud-hypervisor-provider-builder /workspace/bin/cloud-hypervisor-provider .
+
+# Copy the binaries from the builder
+COPY --from=builder /workspace/bin/cloud-hypervisor-provider .
+COPY --from=builder /workspace/bin/irictl-machine .
+
 USER 65532:65532
 
 ENTRYPOINT ["/cloud-hypervisor-provider"]
-
-
