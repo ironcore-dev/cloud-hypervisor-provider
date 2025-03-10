@@ -7,8 +7,7 @@ import (
 	"context"
 
 	"github.com/blang/semver/v4"
-
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/version"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/server/version"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
 )
 

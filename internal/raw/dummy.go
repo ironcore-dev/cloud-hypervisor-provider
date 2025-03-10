@@ -1,0 +1,11 @@
+// SPDX-FileCopyrightText: 2023 SAP SE or an SAP affiliate company and IronCore contributors
+// SPDX-License-Identifier: Apache-2.0
+
+package raw
+
+type Dummy struct {
+}
+
+func (Dummy) Create(_ string, _ ...CreateOption) error {
+	return nil
+}

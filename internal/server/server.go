@@ -4,36 +4,60 @@
 package server
 
 import (
+	"context"
+
+	"github.com/go-logr/logr"
+	"github.com/google/uuid"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
+	"github.com/ironcore-dev/ironcore/broker/common/idgen"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
+	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
+	"github.com/ironcore-dev/provider-utils/storeutils/store"
+	"github.com/ironcore-dev/provider-utils/storeutils/utils"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 var _ iri.MachineRuntimeServer = (*Server)(nil)
 
-// +kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=compute.ironcore.dev,resources=machines,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=compute.ironcore.dev,resources=machines/exec,verbs=get;create
-// +kubebuilder:rbac:groups=storage.ironcore.dev,resources=volumes,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=storage.ironcore.dev,resources=volumes/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=networking.ironcore.dev,resources=networkinterfaces,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.ironcore.dev,resources=networks,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.ironcore.dev,resources=networks/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=networking.ironcore.dev,resources=virtualips,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.ironcore.dev,resources=virtualips/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=networking.ironcore.dev,resources=loadbalancers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.ironcore.dev,resources=loadbalancers/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=networking.ironcore.dev,resources=loadbalancerroutings,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.ironcore.dev,resources=natgateways,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.ironcore.dev,resources=natgateways/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=compute.ironcore.dev,resources=reservations,verbs=get;list;watch;create;update;patch;delete
-
 type Server struct {
+	idGen idgen.IDGen
+
+	machineStore store.Store[*api.Machine]
+	eventStore   recorder.EventStore
 }
 
 type Options struct {
+	IDGen idgen.IDGen
+
+	EventStore recorder.EventStore
 }
 
-func New(opts Options) (*Server, error) {
-	_ = opts
-	return &Server{}, nil
+type nilEventStore struct{}
+
+func (n *nilEventStore) ListEvents() []*recorder.Event {
+	return nil
+}
+
+func setOptionsDefaults(o *Options) {
+	if o.IDGen == nil {
+		o.IDGen = utils.IdGenerateFunc(uuid.NewString)
+	}
+	if o.EventStore == nil {
+		o.EventStore = &nilEventStore{}
+	}
+}
+
+func New(store store.Store[*api.Machine], opts Options) (*Server, error) {
+	setOptionsDefaults(&opts)
+
+	return &Server{
+		idGen:        opts.IDGen,
+		machineStore: store,
+		eventStore:   opts.EventStore,
+	}, nil
+}
+
+// nolint:unparam
+func (s *Server) loggerFrom(ctx context.Context, keysWithValues ...interface{}) logr.Logger {
+	return ctrl.LoggerFrom(ctx, keysWithValues...)
 }

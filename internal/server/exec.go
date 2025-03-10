@@ -10,6 +10,7 @@ import (
 )
 
 func (s *Server) Exec(ctx context.Context, req *iri.ExecRequest) (*iri.ExecResponse, error) {
-	_ = s.loggerFrom(ctx)
-	return &iri.ExecResponse{}, nil
+	return &iri.ExecResponse{
+		Url: "",
+	}, nil
 }

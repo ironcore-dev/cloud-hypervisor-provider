@@ -49,14 +49,22 @@ spec:
       #             operator: In
       #             values:
       #               - linux
-      securityContext:
-        # Projects are configured by default to adhere to the "restricted" Pod Security Standards.
-        # This ensures that deployments meet the highest security requirements for Kubernetes.
-        # For more details, see: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
+#      securityContext:
+#        # Projects are configured by default to adhere to the "restricted" Pod Security Standards.
+#        # This ensures that deployments meet the highest security requirements for Kubernetes.
+#        # For more details, see: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
+#        runAsNonRoot: true
+#        seccompProfile:
+#          type: RuntimeDefault
       initContainers:
+        - name: init-permissions
+          image: busybox
+          command: [ "sh", "-c", "chown -R 65532:65532 /var/lib/cloud-hypervisor-provider" ]
+          volumeMounts:
+            - mountPath: /var/lib/cloud-hypervisor-provider
+              name: cloud-hypervisor-provider
+          securityContext:
+            privileged: true
         - name: prepare-host
           image: ubuntu
           securityContext:
@@ -75,35 +83,36 @@ spec:
               value: 0.4.2
           args:
             - |
-              IFS=' ' read -r -a dependencies <<< "$DEPENDENCIES"
-              for dependency in "${dependencies[@]}"; do
-                if ! dpkg --root=/host-root --get-selections | grep -E "^${dependency}\s+install$" -q; then
-                  echo "Error: $dependency is not installed."
-                  exit 1
-                fi
-              done
-              
-              # Check if the cloud-hypervisor file exists in /opt
-              if [ ! -f "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)" ]; then
-                mkdir -p "/opt/cloud-hypervisor/$(CH_VERSION)"
-                curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/$(CH_VERSION)/$(CH_FILENAME)" -o "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)"
-                chmod a+x "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)"
-              else
-                echo "Cloud Hypervisor file already exists, skipping download."
-              fi
-                
-              # Check if the rust-hypervisor-firmware file exists in /opt
-              if [ ! -f "/opt/rust-hypervisor-firmware/$(FW_VERSION)/$(FW_FILENAME)" ]; then
-                mkdir -p "/opt/rust-hypervisor-firmware/$(FW_VERSION)"
-                curl -L "https://github.com/cloud-hypervisor/rust-hypervisor-firmware/releases/download/$(FW_VERSION)/$(FW_FILENAME)" -o "/opt/rust-hypervisor-firmware/$(FW_VERSION)/$(FW_FILENAME)"
-              else
-                echo "Rust Hypervisor Firmware file already exists, skipping download."
-              fi
+#              apt-get update
+#              apt-get install -y curl
+#
+#              IFS=' ' read -r -a dependencies <<< "$DEPENDENCIES"
+#              for dependency in "${dependencies[@]}"; do
+#                if ! dpkg --root=/host-root --get-selections | grep -E "^${dependency}\s+install$" -q; then
+#                  echo "Error: $dependency is not installed."
+#                  exit 1
+#                fi
+#              done
+#
+#              # Check if the cloud-hypervisor file exists in /opt
+#              if [ ! -f "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)" ]; then
+#                mkdir -p "/opt/cloud-hypervisor/$(CH_VERSION)"
+#                curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/$(CH_VERSION)/$(CH_FILENAME)" -o "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)"
+#                chmod a+x "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)"
+#              else
+#                echo "Cloud Hypervisor file already exists, skipping download."
+#              fi
+#
+#              # Check if the rust-hypervisor-firmware file exists in /opt
+#              if [ ! -f "/opt/rust-hypervisor-firmware/$(FW_VERSION)/$(FW_FILENAME)" ]; then
+#                mkdir -p "/opt/rust-hypervisor-firmware/$(FW_VERSION)"
+#                curl -L "https://github.com/cloud-hypervisor/rust-hypervisor-firmware/releases/download/$(FW_VERSION)/$(FW_FILENAME)" -o "/opt/rust-hypervisor-firmware/$(FW_VERSION)/$(FW_FILENAME)"
+#              else
+#                echo "Rust Hypervisor Firmware file already exists, skipping download."
+#              fi
           volumeMounts:
             - name: etc
               mountPath: /etc
-            - name: libvirt-provider
-              mountPath: /var/lib/libvirt-provider
             - name: host-dpkg
               mountPath: /host-root/var/lib/dpkg
               readOnly: true
@@ -154,18 +163,18 @@ spec:
           name: provider
           securityContext:
             privileged: true
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 8181
-            initialDelaySeconds: 15
-            periodSeconds: 20
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8081
-            initialDelaySeconds: 5
-            periodSeconds: 10
+#          livenessProbe:
+#            httpGet:
+#              path: /healthz
+#              port: 8181
+#            initialDelaySeconds: 15
+#            periodSeconds: 20
+#          readinessProbe:
+#            httpGet:
+#              path: /readyz
+#              port: 8081
+#            initialDelaySeconds: 5
+#            periodSeconds: 10
           resources:
             limits:
               cpu: 100m
@@ -176,8 +185,22 @@ spec:
           volumeMounts:
             - name: var-run
               mountPath: /var/run
+            - mountPath: /var/lib/cloud-hypervisor-provider
+              name: cloud-hypervisor-provider
       volumes:
         - name: var-run
           emptyDir: { }
+        - name: etc
+          hostPath:
+            path: /etc
+            type: Directory
+        - name: host-dpkg
+          hostPath:
+            path: /var/lib/dpkg
+            type: Directory
+        - name: cloud-hypervisor-provider
+          hostPath:
+            path: /var/lib/cloud-hypervisor-provider
+            type: DirectoryOrCreate
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

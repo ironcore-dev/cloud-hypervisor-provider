@@ -10,5 +10,10 @@ import (
 )
 
 func (s *Server) Status(ctx context.Context, req *iri.StatusRequest) (*iri.StatusResponse, error) {
-	return &iri.StatusResponse{}, nil
+	log := s.loggerFrom(ctx)
+
+	log.V(1).Info("Returning machine classes")
+	return &iri.StatusResponse{
+		MachineClassStatus: nil,
+	}, nil
 }

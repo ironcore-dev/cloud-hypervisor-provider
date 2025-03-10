@@ -5,10 +5,112 @@ package server
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
+	"github.com/go-logr/logr"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
+	"github.com/ironcore-dev/provider-utils/storeutils/store"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
+func (s *Server) getCloudHypervisorMachine(ctx context.Context, id string) (*api.Machine, error) {
+	machine, err := s.machineStore.Get(ctx, id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, status.Errorf(codes.NotFound, "machine %s not found", id)
+		}
+		return nil, fmt.Errorf("failed to get machine: %w", err)
+	}
+
+	if !api.IsManagedBy(machine, api.MachineManager) {
+		return nil, status.Errorf(codes.NotFound, "machine %s not found", id)
+	}
+
+	return machine, nil
+}
+
+func (s *Server) listMachines(ctx context.Context, log logr.Logger) ([]*iri.Machine, error) {
+	machines, err := s.machineStore.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error listing machines: %w", err)
+	}
+
+	var res []*iri.Machine
+	for _, machine := range machines {
+		if !api.IsManagedBy(machine, api.MachineManager) {
+			log.V(1).Info("skipping machine, not managed by controller", "machineID", machine.ID)
+			continue
+		}
+
+		iriMachine, err := s.convertMachineToIRIMachine(machine)
+		if err != nil {
+			return nil, err
+		}
+
+		res = append(res, iriMachine)
+	}
+	return res, nil
+}
+
+func (s *Server) filterMachines(machines []*iri.Machine, filter *iri.MachineFilter) []*iri.Machine {
+	if filter == nil {
+		return machines
+	}
+
+	var (
+		res []*iri.Machine
+		sel = labels.SelectorFromSet(filter.LabelSelector)
+	)
+	for _, iriMachine := range machines {
+		if !sel.Matches(labels.Set(iriMachine.Metadata.Labels)) {
+			continue
+		}
+
+		res = append(res, iriMachine)
+	}
+	return res
+}
+
+func (s *Server) getMachine(ctx context.Context, id string) (*iri.Machine, error) {
+	machine, err := s.getCloudHypervisorMachine(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get machine: %w", err)
+	}
+
+	return s.convertMachineToIRIMachine(machine)
+}
+
 func (s *Server) ListMachines(ctx context.Context, req *iri.ListMachinesRequest) (*iri.ListMachinesResponse, error) {
-	return &iri.ListMachinesResponse{}, nil
+	log := s.loggerFrom(ctx)
+
+	if filter := req.Filter; filter != nil && filter.Id != "" {
+		machine, err := s.getMachine(ctx, filter.Id)
+		if err != nil {
+			if status.Code(err) != codes.NotFound {
+				return nil, err
+			}
+			return &iri.ListMachinesResponse{
+				Machines: []*iri.Machine{},
+			}, nil
+		}
+
+		return &iri.ListMachinesResponse{
+			Machines: []*iri.Machine{machine},
+		}, nil
+	}
+
+	machines, err := s.listMachines(ctx, log)
+	if err != nil {
+		return nil, err
+	}
+
+	machines = s.filterMachines(machines, req.Filter)
+
+	return &iri.ListMachinesResponse{
+		Machines: machines,
+	}, nil
 }
