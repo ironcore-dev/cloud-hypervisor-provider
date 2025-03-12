@@ -162,9 +162,7 @@ func Run(ctx context.Context, opts Options) error {
 	machineEvents, err := event.NewListWatchSource[*api.Machine](
 		machineStore.List,
 		machineStore.Watch,
-		event.ListWatchSourceOptions{
-			ResyncDuration: 20 * time.Second,
-		},
+		event.ListWatchSourceOptions{},
 	)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize machine events")
