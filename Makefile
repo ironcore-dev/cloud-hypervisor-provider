@@ -50,8 +50,9 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 
 
 .PHONY: generate
-generate: controller-gen
+generate: controller-gen openapi-code-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	go generate ./cloud-hypervisor
 
 .PHONY: fmt
 fmt: goimports ## Run goimports against code.
@@ -72,6 +73,7 @@ clean: ## Clean any artifacts that can be regenerated.
 	rm -rf client-go/listers
 	rm -rf client-go/ironcore
 	rm -rf client-go/openapi
+	rm -rf cloud-hypervisor/client
 
 .PHONY: add-license
 add-license: addlicense ## Add license headers to all go files.
@@ -150,6 +152,7 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 OPENAPI_EXTRACTOR ?= $(LOCALBIN)/openapi-extractor
 OPENAPI_GEN ?= $(LOCALBIN)/openapi-gen
+OPENAPI_CODE_GEN ?= $(LOCALBIN)/openapi-gen
 VGOPATH ?= $(LOCALBIN)/vgopath
 GEN_CRD_API_REFERENCE_DOCS ?= $(LOCALBIN)/gen-crd-api-reference-docs
 ADDLICENSE ?= $(LOCALBIN)/addlicense
@@ -169,6 +172,7 @@ GOIMPORTS_VERSION ?= v0.26.0
 GOLANGCI_LINT_VERSION ?= v1.64.6
 OPENAPI_EXTRACTOR_VERSION ?= v0.1.9
 SETUP_ENVTEST_VERSION ?= release-0.19
+OPENAPI_CODE_GEN_VERSION ?= v2.4.1
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -192,6 +196,11 @@ openapi-gen: $(OPENAPI_GEN) ## Download openapi-gen locally if necessary.
 $(OPENAPI_GEN): $(LOCALBIN)
 	test -s $(LOCALBIN)/openapi-gen || GOBIN=$(LOCALBIN) go install k8s.io/kube-openapi/cmd/openapi-gen
 
+.PHONY: openapi-code-gen
+openapi-code-gen: $(OPENAPI_CODE_GEN) ## Download openapi-code-gen locally if necessary.
+$(OPENAPI_CODE_GEN): $(LOCALBIN)
+	test -s $(LOCALBIN)/openapi-gen || \
+	GOBIN=$(LOCALBIN) go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OPENAPI_CODE_GEN_VERSION)
 
 .PHONY: vgopath
 vgopath: $(VGOPATH) ## Download vgopath locally if necessary.

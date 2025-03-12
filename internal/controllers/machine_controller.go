@@ -15,6 +15,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	ociImage "github.com/ironcore-dev/cloud-hypervisor-provider/internal/oci"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
 	"github.com/ironcore-dev/provider-utils/eventutils/event"
 	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
 	"github.com/ironcore-dev/provider-utils/storeutils/store"
@@ -31,7 +32,7 @@ type MachineReconcilerOptions struct {
 	ImageCache ociImage.Cache
 	Raw        raw.Raw
 
-	Host host.Host
+	Paths host.Paths
 }
 
 func NewMachineReconciler(
@@ -39,6 +40,7 @@ func NewMachineReconciler(
 	machines store.Store[*api.Machine],
 	machineEvents event.Source[*api.Machine],
 	eventRecorder recorder.EventRecorder,
+	vmm *vmm.Manager,
 	opts MachineReconcilerOptions,
 ) (*MachineReconciler, error) {
 	if machines == nil {
@@ -57,7 +59,8 @@ func NewMachineReconciler(
 		EventRecorder: eventRecorder,
 		imageCache:    opts.ImageCache,
 		raw:           opts.Raw,
-		host:          opts.Host,
+		paths:         opts.Paths,
+		vmm:           vmm,
 	}, nil
 }
 
@@ -68,7 +71,9 @@ type MachineReconciler struct {
 	imageCache ociImage.Cache
 	raw        raw.Raw
 
-	host host.Host
+	paths host.Paths
+
+	vmm *vmm.Manager
 
 	machines      store.Store[*api.Machine]
 	machineEvents event.Source[*api.Machine]
@@ -176,10 +181,28 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 	}
 
 	log.V(1).Info("Making machine directories")
-	if err := host.MakeMachineDirs(r.host, machine.ID); err != nil {
+	if err := host.MakeMachineDirs(r.paths, machine.ID); err != nil {
 		return fmt.Errorf("error making machine directories: %w", err)
 	}
 	log.V(1).Info("Successfully made machine directories")
+
+	if err := r.vmm.InitVMM(ctx, id); err != nil {
+		return fmt.Errorf("failed to init vmm: %w", err)
+	}
+
+	if err := r.vmm.Ping(ctx, machine.ID); err != nil {
+		return fmt.Errorf("failed to ping vmm: %w", err)
+	}
+
+	vm, err := r.vmm.GetVM(ctx, machine.ID)
+	if err != nil {
+		return fmt.Errorf("failed to ping vmm: %w", err)
+	}
+
+	_ = vm
+
+	// img, err := r.imageCache.Get(ctx, *machine.Spec.Image)
+	// _ = img
 
 	return nil
 }
