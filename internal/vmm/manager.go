@@ -53,6 +53,12 @@ var (
 	ErrAlreadyExists            = errors.New("already exists")
 	ErrResourceVersionNotLatest = errors.New("resourceVersion is not latest")
 	ErrVmInitialized            = errors.New("vm already initialized")
+)
+
+func IgnoreErrVmInitialized(err error) error {
+	if errors.Is(err, ErrVmInitialized) {
+		return nil
+	}
 
 	ErrVmNotCreated = errors.New("vm is not created")
 )
@@ -171,6 +177,7 @@ func (m *Manager) GetVM(ctx context.Context, machineId string) (*client.VmInfo, 
 
 	log := m.log.WithValues("machineID", machineId)
 
+func (m *Manager) ping(machineId string) error {
 	apiClient, found := m.vms[machineId]
 	if !found {
 		return nil, ErrNotFound
