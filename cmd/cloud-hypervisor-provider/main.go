@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/ironcore-dev/cloud-hypervisor-provider/cmd/cloud-hypervisor-provider/app"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 

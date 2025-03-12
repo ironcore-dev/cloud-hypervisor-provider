@@ -1,12 +1,11 @@
 module github.com/ironcore-dev/cloud-hypervisor-provider
 
-go 1.23.0
-
-toolchain go1.23.3
+go 1.24
 
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/containerd/containerd v1.7.26
+	github.com/getkin/kin-openapi v0.129.0
 	github.com/go-logr/logr v1.4.2
 	github.com/google/uuid v1.6.0
 	github.com/ironcore-dev/controller-utils v0.9.8
@@ -76,8 +75,12 @@ require (
 	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/oasdiff/yaml v0.0.0-20241210131133-6b86fb107d80 // indirect
+	github.com/oasdiff/yaml3 v0.0.0-20241210130736-a94c01f36349 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/perimeterx/marshmallow v1.1.5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.21.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
