@@ -30,7 +30,10 @@ func (s *Server) updatePowerState(ctx context.Context, machine *api.Machine, iri
 	return nil
 }
 
-func (s *Server) UpdateMachinePower(ctx context.Context, req *iri.UpdateMachinePowerRequest) (*iri.UpdateMachinePowerResponse, error) {
+func (s *Server) UpdateMachinePower(
+	ctx context.Context,
+	req *iri.UpdateMachinePowerRequest,
+) (*iri.UpdateMachinePowerResponse, error) {
 	log := s.loggerFrom(ctx)
 
 	log.V(1).Info("Getting machine")

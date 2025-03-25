@@ -17,6 +17,7 @@ RUN --mount=type=cache,target=/go/pkg \
 COPY api/ api/
 COPY cmd/ cmd/
 COPY internal/ internal/
+COPY cloud-hypervisor/ cloud-hypervisor/
 
 RUN mkdir bin
 

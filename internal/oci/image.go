@@ -242,7 +242,12 @@ func (c *LocalCache) pullImage(ctx context.Context, ref string) error {
 		if err = c.store.Delete(ctx, ref); err != nil {
 			return fmt.Errorf("error deleting oci from local oci store %s: %w", ref, err)
 		}
-		return fmt.Errorf("oci digest verification failed for oci %s: source digest %s, copied digest %s", ref, srcDigest, copiedDigest)
+		return fmt.Errorf(
+			"oci digest verification failed for oci %s: source digest %s, copied digest %s",
+			ref,
+			srcDigest,
+			copiedDigest,
+		)
 	}
 	return nil
 }
