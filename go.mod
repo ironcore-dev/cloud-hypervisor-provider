@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/blang/semver/v4 v4.0.0
-	github.com/containerd/containerd v1.7.26
+	github.com/containerd/containerd v1.7.27
 	github.com/getkin/kin-openapi v0.129.0
 	github.com/go-logr/logr v1.4.2
 	github.com/google/uuid v1.6.0
