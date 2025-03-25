@@ -152,7 +152,7 @@ func Run(ctx context.Context, opts Options) error {
 
 	pluginManager := volume.NewPluginManager()
 	if err := pluginManager.InitPlugins(hostPaths, []volume.Plugin{
-		ceph.NewPlugin(nil),
+		ceph.NewPlugin(ceph.DefaultProvider(log, hostPaths, "", false)),
 	}); err != nil {
 		setupLog.Error(err, "failed to initialize plugins")
 		return err

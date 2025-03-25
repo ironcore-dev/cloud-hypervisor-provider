@@ -9,7 +9,9 @@ import (
 	"net"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"k8s.io/utils/ptr"
 )
@@ -41,6 +43,17 @@ type validatedVolume struct {
 type Provider interface {
 	Mount(ctx context.Context, machineID string, volume *validatedVolume) (string, error)
 	Unmount(ctx context.Context, machineID string, volumeID string) error
+}
+
+//TODO clean this up later
+
+func DefaultProvider(log logr.Logger, paths host.Paths, bin string, detach bool) Provider {
+	return &QemuStorage{
+		log:    log,
+		paths:  paths,
+		bin:    bin,
+		detach: detach,
+	}
 }
 
 type plugin struct {

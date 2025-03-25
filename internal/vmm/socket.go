@@ -65,12 +65,15 @@ func waitForSocketWithTimeout(ctx context.Context, timeout time.Duration, apiSoc
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	if err := wait.PollUntilContextCancel(waitCtx, 500*time.Millisecond, true, func(ctx context.Context) (done bool, err error) {
-		if stat, err := os.Stat(apiSocket); err == nil && stat.Mode().Type()&os.ModeSocket != 0 {
-			return true, nil
-		}
-		return false, nil
-	}); err != nil {
+	if err := wait.PollUntilContextCancel(
+		waitCtx, 500*time.Millisecond,
+		true,
+		func(ctx context.Context) (done bool, err error) {
+			if stat, err := os.Stat(apiSocket); err == nil && stat.Mode().Type()&os.ModeSocket != 0 {
+				return true, nil
+			}
+			return false, nil
+		}); err != nil {
 		return fmt.Errorf("vmm socket is not available: %w", err)
 	}
 

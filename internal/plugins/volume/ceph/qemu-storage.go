@@ -1,12 +1,11 @@
+// SPDX-FileCopyrightText: 2025 SAP SE or an SAP affiliate company and IronCore contributors
+// SPDX-License-Identifier: Apache-2.0
+
 package ceph
 
 import (
 	"context"
 	"fmt"
-	"github.com/go-logr/logr"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
-	"github.com/ironcore-dev/ironcore/broker/common"
-	utilstrings "k8s.io/utils/strings"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,23 +13,31 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/go-logr/logr"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
+	"github.com/ironcore-dev/ironcore/broker/common"
+	utilstrings "k8s.io/utils/strings"
 )
 
-type qemu struct {
+type QemuStorage struct {
 	log    logr.Logger
 	paths  host.Paths
 	bin    string
 	detach bool
 }
 
-func (q *qemu) Mount(ctx context.Context, machineID string, volume *validatedVolume) (string, error) {
+func (q *QemuStorage) Mount(ctx context.Context, machineID string, volume *validatedVolume) (string, error) {
 	volumeDir := q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle)
 	if err := os.MkdirAll(volumeDir, os.ModePerm); err != nil {
 		return "", err
 	}
 
 	log := q.log.WithValues("machineID", machineID, "volumeID", volume.handle)
-	socketPath := filepath.Join(q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle), "socket")
+	socketPath := filepath.Join(
+		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle),
+		"socket",
+	)
 
 	log.V(2).Info("Checking if socket is present", "path", socketPath)
 	present, err := isSocketPresent(socketPath)
@@ -60,7 +67,7 @@ func (q *qemu) Mount(ctx context.Context, machineID string, volume *validatedVol
 	return socketPath, nil
 }
 
-func (q *qemu) createCephConf(log logr.Logger, machineID string, volume *validatedVolume) (string, error) {
+func (q *QemuStorage) createCephConf(log logr.Logger, machineID string, volume *validatedVolume) (string, error) {
 	confPath := filepath.Join(
 		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle),
 		"conf",
@@ -102,7 +109,7 @@ func (q *qemu) createCephConf(log logr.Logger, machineID string, volume *validat
 	return confPath, nil
 }
 
-func (q *qemu) startDaemon(
+func (q *QemuStorage) startDaemon(
 	ctx context.Context,
 	log logr.Logger,
 	machineID,
@@ -118,9 +125,21 @@ func (q *qemu) startDaemon(
 	cmd := []string{
 		q.bin,
 		"--blockdev",
-		fmt.Sprintf("driver=rbd,node-name=%s,pool=%s,image=%s,discard=unmap,cache.direct=on,user=%s,conf=%s", volume.handle, volume.pool, volume.image, volume.userID, confPath),
+		fmt.Sprintf(
+			"driver=rbd,node-name=%s,pool=%s,image=%s,discard=unmap,cache.direct=on,user=%s,conf=%s",
+			volume.handle,
+			volume.pool,
+			volume.image,
+			volume.userID,
+			confPath,
+		),
 		"--export",
-		fmt.Sprintf("vhost-user-blk,id=%s,node-name=%s,addr.type=unix,addr.path=%s,writable=on", volume.handle, volume.handle, socket),
+		fmt.Sprintf(
+			"vhost-user-blk,id=%s,node-name=%s,addr.type=unix,addr.path=%s,writable=on",
+			volume.handle,
+			volume.handle,
+			socket,
+		),
 	}
 
 	log.V(1).Info("Start qemu-storage-daemon", "cmd", cmd)
@@ -151,21 +170,26 @@ func (q *qemu) startDaemon(
 		return fmt.Errorf("error opening conf file %s: %w", pidPath, err)
 	}
 
-	_, err = pidFile.WriteString(fmt.Sprintf("%s", process.Process.Pid))
-	if err != nil {
+	if _, err := fmt.Fprintf(pidFile, "[client.%s]\n", volume.userID); err != nil {
 		return fmt.Errorf("error writing to pid file %s: %w", confPath, err)
 	}
 
 	return nil
 }
 
-func (q *qemu) pidFilePath(machineID, volumeHandle string) string {
-	return filepath.Join(q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volumeHandle), "pid")
+func (q *QemuStorage) pidFilePath(machineID, volumeHandle string) string {
+	return filepath.Join(
+		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volumeHandle),
+		"pid",
+	)
 }
 
-func (q *qemu) Unmount(ctx context.Context, machineID, volumeID string) error {
+func (q *QemuStorage) Unmount(ctx context.Context, machineID, volumeID string) error {
 	log := q.log.WithValues("machineID", machineID, "volumeID", volumeID)
-	socketPath := filepath.Join(q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volumeID), "socket")
+	socketPath := filepath.Join(
+		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volumeID),
+		"socket",
+	)
 
 	log.V(2).Info("Checking if socket is present", "path", socketPath)
 	present, err := isSocketPresent(socketPath)
@@ -174,7 +198,7 @@ func (q *qemu) Unmount(ctx context.Context, machineID, volumeID string) error {
 	}
 
 	if !present {
-
+		return nil
 	}
 
 	pidPath := q.pidFilePath(machineID, volumeID)

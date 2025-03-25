@@ -56,7 +56,10 @@ func (p *plugin) CanSupport(volume *api.VolumeSpec) bool {
 }
 
 func (p *plugin) diskFilename(computeVolumeName string, machineID string) string {
-	return filepath.Join(p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), computeVolumeName), "disk.raw")
+	return filepath.Join(
+		p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), computeVolumeName),
+		"disk.raw",
+	)
 }
 
 func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machine *api.Machine) (*volume.Volume, error) {
