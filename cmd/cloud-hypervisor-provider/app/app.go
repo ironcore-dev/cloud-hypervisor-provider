@@ -16,6 +16,8 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/controllers"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/oci"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/ceph"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/server"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/strategy"
@@ -145,6 +147,14 @@ func Run(ctx context.Context, opts Options) error {
 	rawInst, err := raw.Instance(raw.Default())
 	if err != nil {
 		setupLog.Error(err, "failed to initialize raw instance")
+		return err
+	}
+
+	pluginManager := volume.NewPluginManager()
+	if err := pluginManager.InitPlugins(hostPaths, []volume.Plugin{
+		ceph.NewPlugin(ceph.DefaultProvider(log, hostPaths, "", false)),
+	}); err != nil {
+		setupLog.Error(err, "failed to initialize plugins")
 		return err
 	}
 
