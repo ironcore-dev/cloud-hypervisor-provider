@@ -19,7 +19,9 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/server"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/strategy"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
 	"github.com/ironcore-dev/ironcore-image/oci/remote"
+	ocistore "github.com/ironcore-dev/ironcore-image/oci/store"
 	"github.com/ironcore-dev/ironcore/broker/common"
 	commongrpc "github.com/ironcore-dev/ironcore/broker/common/grpc"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
@@ -46,6 +48,10 @@ type Options struct {
 	Address string
 
 	RootDir string
+
+	CloudHypervisorBin       string
+	CloudHypervisorRemoteBin string
+	DetachVms                bool
 }
 
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
@@ -56,6 +62,27 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 		"provider-root-dir",
 		filepath.Join(homeDir, ".cloud-hypervisor-provider"),
 		"Path to the directory where the provider manages its content at.",
+	)
+
+	fs.StringVar(
+		&o.CloudHypervisorBin,
+		"cloud-hypervisor-provider-bin",
+		"",
+		"Path to the cloud-hypervisor  binary.",
+	)
+
+	fs.StringVar(
+		&o.CloudHypervisorRemoteBin,
+		"cloud-hypervisor-remote-bin",
+		"",
+		"Path to the cloud-hypervisor remote binary.",
+	)
+
+	fs.BoolVar(
+		&o.DetachVms,
+		"detach-vms",
+		true,
+		"Detach VMs processes from manager process.",
 	)
 
 }
@@ -91,7 +118,7 @@ func Run(ctx context.Context, opts Options) error {
 	log := ctrl.LoggerFrom(ctx)
 	setupLog := log.WithName("setup")
 
-	providerHost, err := host.NewAt(opts.RootDir)
+	hostPaths, err := host.PathsAt(opts.RootDir)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize provider host")
 		return err
@@ -103,7 +130,13 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	imgCache, err := oci.NewLocalCache(log, reg, providerHost.OCIStore())
+	ociStore, err := ocistore.New(hostPaths.ImagesDir())
+	if err != nil {
+		setupLog.Error(err, "error creating oci store")
+		return err
+	}
+
+	imgCache, err := oci.NewLocalCache(log, reg, ociStore)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize oci manager")
 		return err
@@ -116,7 +149,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	machineStore, err := hostutils.NewStore[*api.Machine](hostutils.Options[*api.Machine]{
-		Dir:            providerHost.MachineStoreDir(),
+		Dir:            hostPaths.MachineStoreDir(),
 		NewFunc:        func() *api.Machine { return &api.Machine{} },
 		CreateStrategy: strategy.MachineStrategy,
 	})
@@ -141,15 +174,22 @@ func Run(ctx context.Context, opts Options) error {
 		MachineEventResyncInterval: 0,
 	})
 
+	virtualMachineManager := vmm.NewManager(hostPaths, vmm.ManagerOptions{
+		CloudHypervisorBin: opts.CloudHypervisorBin,
+		Logger:             log.WithName("virtual-machine-manager"),
+		DetachVms:          opts.DetachVms,
+	})
+
 	machineReconciler, err := controllers.NewMachineReconciler(
 		log.WithName("machine-reconciler"),
 		machineStore,
 		machineEvents,
 		eventRecorder,
+		virtualMachineManager,
 		controllers.MachineReconcilerOptions{
 			ImageCache: imgCache,
 			Raw:        rawInst,
-			Host:       providerHost,
+			Paths:      hostPaths,
 		},
 	)
 	if err != nil {

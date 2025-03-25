@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	ocistore "github.com/ironcore-dev/ironcore-image/oci/store"
 )
 
 const (
@@ -135,20 +133,6 @@ func (p *paths) MachineIgnitionFile(machineUID string) string {
 	return filepath.Join(p.MachineIgnitionsDir(machineUID), DefaultMachineIgnitionFile)
 }
 
-type Host interface {
-	Paths
-	OCIStore() *ocistore.Store
-}
-
-type host struct {
-	Paths
-	ociStore *ocistore.Store
-}
-
-func (h *host) OCIStore() *ocistore.Store {
-	return h.ociStore
-}
-
 func PathsAt(rootDir string) (Paths, error) {
 	p := &paths{rootDir}
 	if err := os.MkdirAll(p.RootDir(), os.ModePerm); err != nil {
@@ -161,32 +145,6 @@ func PathsAt(rootDir string) (Paths, error) {
 		return nil, fmt.Errorf("error creating machines directory: %w", err)
 	}
 	return p, nil
-}
-
-func NewAt(rootDir string) (Host, error) {
-	p, err := PathsAt(rootDir)
-	if err != nil {
-		return nil, err
-	}
-
-	ociStore, err := ocistore.New(p.ImagesDir())
-	if err != nil {
-		return nil, fmt.Errorf("error creating oci store: %w", err)
-	}
-
-	return &host{
-		Paths:    p,
-		ociStore: ociStore,
-	}, nil
-}
-
-type MachineVolume struct {
-	PluginName        string
-	ComputeVolumeName string
-}
-
-type MachineNetworkInterface struct {
-	NetworkInterfaceName string
 }
 
 func MakeMachineDirs(paths Paths, machineUID string) error {

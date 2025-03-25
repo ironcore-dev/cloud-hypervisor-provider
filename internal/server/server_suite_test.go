@@ -62,7 +62,7 @@ var _ = BeforeEach(func() {
 	Expect(os.Chmod(tempDir, 0730)).Should(Succeed())
 
 	By("preparing the host dirs")
-	providerHost, err := host.NewAt(tempDir)
+	providerHost, err := host.PathsAt(tempDir)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("setting up the machine store")
