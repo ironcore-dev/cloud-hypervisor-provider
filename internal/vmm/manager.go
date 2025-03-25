@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025 SAP SE or an SAP affiliate company and IronCore contributors
+// SPDX-License-Identifier: Apache-2.0
+
 package vmm
 
 import (
@@ -6,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -15,6 +19,10 @@ import (
 	"github.com/ironcore-dev/ironcore/broker/common"
 	utilssync "github.com/ironcore-dev/provider-utils/storeutils/sync"
 	"k8s.io/utils/ptr"
+)
+
+const (
+	DefaultSocketName = "api.sock"
 )
 
 type ManagerOptions struct {
@@ -53,12 +61,6 @@ var (
 	ErrAlreadyExists            = errors.New("already exists")
 	ErrResourceVersionNotLatest = errors.New("resourceVersion is not latest")
 	ErrVmInitialized            = errors.New("vm already initialized")
-)
-
-func IgnoreErrVmInitialized(err error) error {
-	if errors.Is(err, ErrVmInitialized) {
-		return nil
-	}
 
 	ErrVmNotCreated = errors.New("vm is not created")
 )
@@ -100,7 +102,7 @@ func (m *Manager) InitVMM(ctx context.Context, machineId string) error {
 	defer m.idMu.Unlock(machineId)
 
 	log := m.log.WithValues("machineID", machineId)
-	apiSocket := m.paths.MachineApiSock(machineId)
+	apiSocket := filepath.Join(m.paths.MachineDir(machineId), DefaultSocketName)
 
 	log.V(2).Info("Checking if vmm socket is present", "path", apiSocket)
 	present, err := isSocketPresent(apiSocket)
@@ -177,7 +179,6 @@ func (m *Manager) GetVM(ctx context.Context, machineId string) (*client.VmInfo, 
 
 	log := m.log.WithValues("machineID", machineId)
 
-func (m *Manager) ping(machineId string) error {
 	apiClient, found := m.vms[machineId]
 	if !found {
 		return nil, ErrNotFound
