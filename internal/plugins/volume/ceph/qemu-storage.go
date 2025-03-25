@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 type qemu struct {
@@ -51,7 +52,7 @@ func (q *qemu) Mount(ctx context.Context, machineID string, volume *validatedVol
 
 	if !present || !active {
 		log.V(1).Info("qemu-storage-daemon socket is not present, create it", "path", socketPath)
-		if err := q.startDaemon(log, machineID, socketPath, confPath, volume); err != nil {
+		if err := q.startDaemon(ctx, log, machineID, socketPath, confPath, volume); err != nil {
 			return "", fmt.Errorf("error starting qemu-storage-daemon: %w", err)
 		}
 	}
@@ -60,8 +61,14 @@ func (q *qemu) Mount(ctx context.Context, machineID string, volume *validatedVol
 }
 
 func (q *qemu) createCephConf(log logr.Logger, machineID string, volume *validatedVolume) (string, error) {
-	confPath := filepath.Join(q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle), "conf")
-	keyPath := filepath.Join(q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle), "key")
+	confPath := filepath.Join(
+		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle),
+		"conf",
+	)
+	keyPath := filepath.Join(
+		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle),
+		"key",
+	)
 
 	log.V(2).Info("Creating ceph conf", "confPath", confPath)
 	confFile, err := os.OpenFile(confPath, os.O_CREATE|os.O_WRONLY, 0644)
@@ -69,7 +76,12 @@ func (q *qemu) createCephConf(log logr.Logger, machineID string, volume *validat
 		return "", fmt.Errorf("error opening conf file %s: %w", confPath, err)
 	}
 
-	confData := fmt.Sprintf("[global]\nmon_host = %s \n\n[client.%s]\nkeyring = %s", strings.Join(volume.monitors, ","), volume.userID, keyPath)
+	confData := fmt.Sprintf(
+		"[global]\nmon_host = %s \n\n[client.%s]\nkeyring = %s",
+		strings.Join(volume.monitors, ","),
+		volume.userID,
+		keyPath,
+	)
 	_, err = confFile.WriteString(confData)
 	if err != nil {
 		return "", fmt.Errorf("error writing to conf file %s: %w", confPath, err)
@@ -90,7 +102,14 @@ func (q *qemu) createCephConf(log logr.Logger, machineID string, volume *validat
 	return confPath, nil
 }
 
-func (q *qemu) startDaemon(log logr.Logger, machineID, socket, confPath string, volume *validatedVolume) error {
+func (q *qemu) startDaemon(
+	ctx context.Context,
+	log logr.Logger,
+	machineID,
+	socket,
+	confPath string,
+	volume *validatedVolume,
+) error {
 	log.V(2).Info("Cleaning up any previous socket")
 	if err := common.CleanupSocketIfExists(socket); err != nil {
 		return fmt.Errorf("error cleaning up socket: %w", err)
@@ -119,6 +138,11 @@ func (q *qemu) startDaemon(log logr.Logger, machineID, socket, confPath string, 
 	log.V(1).Info("Starting qemu-storage-daemon")
 	if err := process.Start(); err != nil {
 		return fmt.Errorf("failed to start qemu-storage-daemon: %w", err)
+	}
+
+	log.V(2).Info("Wait for socket", "path", socket)
+	if err := waitForSocketWithTimeout(ctx, 2*time.Second, socket); err != nil {
+		return fmt.Errorf("error waiting for socket: %w", err)
 	}
 
 	pidPath := q.pidFilePath(machineID, volume.handle)
