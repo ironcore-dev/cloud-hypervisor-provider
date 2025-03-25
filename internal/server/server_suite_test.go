@@ -99,9 +99,15 @@ var _ = BeforeEach(func() {
 
 	Eventually(func() error {
 		return isSocketAvailable(filepath.Join(tempDir, "test.sock"))
-	}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+	}).
+		WithTimeout(30 * time.Second).
+		WithPolling(500 * time.Millisecond).
+		Should(Succeed())
 
-	address, err := machine.GetAddressWithTimeout(3*time.Second, fmt.Sprintf("unix://%s", filepath.Join(tempDir, "test.sock")))
+	address, err := machine.GetAddressWithTimeout(
+		3*time.Second, fmt.Sprintf("unix://%s",
+			filepath.Join(tempDir, "test.sock")),
+	)
 	Expect(err).NotTo(HaveOccurred())
 
 	gconn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))

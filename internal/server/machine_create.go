@@ -17,7 +17,11 @@ func calcResources() (int64, int64) {
 	return 4, 1024
 }
 
-func (s *Server) createMachineFromIRIMachine(ctx context.Context, log logr.Logger, iriMachine *iri.Machine) (*api.Machine, error) {
+func (s *Server) createMachineFromIRIMachine(
+	ctx context.Context,
+	log logr.Logger,
+	iriMachine *iri.Machine,
+) (*api.Machine, error) {
 	log.V(2).Info("Getting machine config")
 
 	switch {
@@ -89,7 +93,10 @@ func (s *Server) createMachineFromIRIMachine(ctx context.Context, log logr.Logge
 	return apiMachine, nil
 }
 
-func (s *Server) CreateMachine(ctx context.Context, req *iri.CreateMachineRequest) (res *iri.CreateMachineResponse, retErr error) {
+func (s *Server) CreateMachine(
+	ctx context.Context,
+	req *iri.CreateMachineRequest,
+) (res *iri.CreateMachineResponse, retErr error) {
 	log := s.loggerFrom(ctx)
 
 	log.V(1).Info("Creating machine from iri machine")
