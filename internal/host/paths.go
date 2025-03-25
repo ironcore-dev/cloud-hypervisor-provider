@@ -16,7 +16,6 @@ const (
 	DefaultMachinesDir                 = "machines"
 	DefaultStoreDir                    = "store"
 	DefaultMachineStoreDir             = "machines"
-	DefaultMachineApiSocket            = "api.sock"
 	DefaultMachineVolumesDir           = "volumes"
 	DefaultMachineIgnitionsDir         = "ignitions"
 	DefaultMachineIgnitionFile         = "data.ign"
@@ -40,7 +39,6 @@ type Paths interface {
 	MachinePluginDir(machineUID string, pluginName string) string
 
 	MachineDir(machineUID string) string
-	MachineApiSock(machineUID string) string
 	MachineRootFSDir(machineUID string) string
 	MachineRootFSFile(machineUID string) string
 	MachineVolumesDir(machineUID string) string
@@ -89,10 +87,6 @@ func (p *paths) PluginDir(pluginName string) string {
 
 func (p *paths) MachineDir(machineUID string) string {
 	return filepath.Join(p.MachinesDir(), machineUID)
-}
-
-func (p *paths) MachineApiSock(machineUID string) string {
-	return filepath.Join(p.MachineDir(machineUID), DefaultMachineApiSocket)
 }
 
 func (p *paths) MachineRootFSDir(machineUID string) string {
