@@ -152,7 +152,13 @@ func Run(ctx context.Context, opts Options) error {
 
 	pluginManager := volume.NewPluginManager()
 	if err := pluginManager.InitPlugins(hostPaths, []volume.Plugin{
-		ceph.NewPlugin(ceph.DefaultProvider(log, hostPaths, "", false)),
+		ceph.NewPlugin(ceph.DefaultProvider(
+			log,
+			hostPaths,
+			//TODO flag
+			"/usr/bin/qemu-storage-daemon",
+			false,
+		)),
 	}); err != nil {
 		setupLog.Error(err, "failed to initialize plugins")
 		return err
@@ -196,6 +202,7 @@ func Run(ctx context.Context, opts Options) error {
 		machineEvents,
 		eventRecorder,
 		virtualMachineManager,
+		pluginManager,
 		controllers.MachineReconcilerOptions{
 			ImageCache: imgCache,
 			Raw:        rawInst,

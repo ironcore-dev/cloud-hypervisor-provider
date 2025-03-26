@@ -34,10 +34,7 @@ func (q *QemuStorage) Mount(ctx context.Context, machineID string, volume *valid
 	}
 
 	log := q.log.WithValues("machineID", machineID, "volumeID", volume.handle)
-	socketPath := filepath.Join(
-		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle),
-		"socket",
-	)
+	socketPath := filepath.Join(volumeDir, "socket")
 
 	log.V(2).Info("Checking if socket is present", "path", socketPath)
 	present, err := isSocketPresent(socketPath)
@@ -45,10 +42,13 @@ func (q *QemuStorage) Mount(ctx context.Context, machineID string, volume *valid
 		return "", fmt.Errorf("error checking if %s is a socket: %w", socketPath, err)
 	}
 
-	log.V(2).Info("Checking if socket is active", "path", socketPath)
-	active, err := isSocketActive(socketPath)
-	if err != nil {
-		return "", fmt.Errorf("error checking if %s is a active socket: %w", socketPath, err)
+	var active bool
+	if present {
+		log.V(2).Info("Checking if socket is active", "path", socketPath)
+		active, err = isSocketActive(socketPath)
+		if err != nil {
+			return "", fmt.Errorf("error checking if %s is a active socket: %w", socketPath, err)
+		}
 	}
 
 	log.V(2).Info("Checking ceph conf")
@@ -78,7 +78,7 @@ func (q *QemuStorage) createCephConf(log logr.Logger, machineID string, volume *
 	)
 
 	log.V(2).Info("Creating ceph conf", "confPath", confPath)
-	confFile, err := os.OpenFile(confPath, os.O_CREATE|os.O_WRONLY, 0644)
+	confFile, err := os.OpenFile(confPath, os.O_CREATE|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return "", fmt.Errorf("error opening conf file %s: %w", confPath, err)
 	}
@@ -87,7 +87,7 @@ func (q *QemuStorage) createCephConf(log logr.Logger, machineID string, volume *
 		"[global]\nmon_host = %s \n\n[client.%s]\nkeyring = %s",
 		strings.Join(volume.monitors, ","),
 		volume.userID,
-		keyPath,
+		"./key",
 	)
 	_, err = confFile.WriteString(confData)
 	if err != nil {
@@ -95,7 +95,7 @@ func (q *QemuStorage) createCephConf(log logr.Logger, machineID string, volume *
 	}
 
 	log.V(1).Info("Creating ceph key", "keyPath", keyPath)
-	keyFile, err := os.OpenFile(keyPath, os.O_CREATE|os.O_WRONLY, 0644)
+	keyFile, err := os.OpenFile(keyPath, os.O_CREATE|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return "", fmt.Errorf("error opening key file %s: %w", keyPath, err)
 	}
@@ -127,7 +127,7 @@ func (q *QemuStorage) startDaemon(
 		"--blockdev",
 		fmt.Sprintf(
 			"driver=rbd,node-name=%s,pool=%s,image=%s,discard=unmap,cache.direct=on,user=%s,conf=%s",
-			volume.handle,
+			"rbd0",
 			volume.pool,
 			volume.image,
 			volume.userID,

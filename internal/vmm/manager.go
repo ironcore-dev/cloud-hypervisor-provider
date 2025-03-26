@@ -110,10 +110,13 @@ func (m *Manager) InitVMM(ctx context.Context, machineId string) error {
 		return fmt.Errorf("error checking if %s is a socket: %w", apiSocket, err)
 	}
 
-	log.V(2).Info("Checking if vmm socket is active", "path", apiSocket)
-	active, err := isSocketActive(apiSocket)
-	if err != nil {
-		return fmt.Errorf("error checking if %s is a active socket: %w", apiSocket, err)
+	var active bool
+	if present {
+		log.V(2).Info("Checking if vmm socket is active", "path", apiSocket)
+		active, err = isSocketActive(apiSocket)
+		if err != nil {
+			return fmt.Errorf("error checking if %s is a active socket: %w", apiSocket, err)
+		}
 	}
 
 	if !present || !active {

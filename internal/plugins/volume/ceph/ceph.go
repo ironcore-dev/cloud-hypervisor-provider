@@ -62,7 +62,9 @@ type plugin struct {
 }
 
 func NewPlugin(provider Provider) volume.Plugin {
-	return &plugin{}
+	return &plugin{
+		provider: provider,
+	}
 }
 
 func (p *plugin) Init(host volume.Host) error {
@@ -147,8 +149,8 @@ func readVolumeAttributes(attrs map[string]string, volumeData *validatedVolume) 
 	}
 
 	volumeData.monitors = monitors
-	volumeData.image = split[0]
-	volumeData.pool = split[1]
+	volumeData.image = split[1]
+	volumeData.pool = split[0]
 
 	return nil
 }

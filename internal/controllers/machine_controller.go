@@ -14,6 +14,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	ociImage "github.com/ironcore-dev/cloud-hypervisor-provider/internal/oci"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
 	"github.com/ironcore-dev/provider-utils/eventutils/event"
@@ -41,6 +42,7 @@ func NewMachineReconciler(
 	machineEvents event.Source[*api.Machine],
 	eventRecorder recorder.EventRecorder,
 	vmm *vmm.Manager,
+	volumePluginManager *volume.PluginManager,
 	opts MachineReconcilerOptions,
 ) (*MachineReconciler, error) {
 	if machines == nil {
@@ -52,15 +54,18 @@ func NewMachineReconciler(
 	}
 
 	return &MachineReconciler{
-		log:           log,
-		queue:         workqueue.NewTypedRateLimitingQueue[string](workqueue.DefaultTypedControllerRateLimiter[string]()),
-		machines:      machines,
-		machineEvents: machineEvents,
-		EventRecorder: eventRecorder,
-		imageCache:    opts.ImageCache,
-		raw:           opts.Raw,
-		paths:         opts.Paths,
-		vmm:           vmm,
+		log: log,
+		queue: workqueue.NewTypedRateLimitingQueue[string](
+			workqueue.DefaultTypedControllerRateLimiter[string](),
+		),
+		machines:            machines,
+		machineEvents:       machineEvents,
+		EventRecorder:       eventRecorder,
+		imageCache:          opts.ImageCache,
+		raw:                 opts.Raw,
+		paths:               opts.Paths,
+		vmm:                 vmm,
+		VolumePluginManager: volumePluginManager,
 	}, nil
 }
 
@@ -74,6 +79,8 @@ type MachineReconciler struct {
 	paths host.Paths
 
 	vmm *vmm.Manager
+
+	VolumePluginManager *volume.PluginManager
 
 	machines      store.Store[*api.Machine]
 	machineEvents event.Source[*api.Machine]
@@ -194,12 +201,27 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return fmt.Errorf("failed to ping vmm: %w", err)
 	}
 
-	vm, err := r.vmm.GetVM(ctx, machine.ID)
-	if err != nil {
-		return fmt.Errorf("failed to ping vmm: %w", err)
-	}
+	//vm, err := r.vmm.GetVM(ctx, machine.ID)
+	//if err != nil {
+	//	return fmt.Errorf("failed to ping vmm: %w", err)
+	//}
+	//
+	//_ = vm
 
-	_ = vm
+	if len(machine.Spec.Volumes) > 0 {
+		vol := machine.Spec.Volumes[0]
+		plugin, err := r.VolumePluginManager.FindPluginBySpec(vol)
+		if err != nil {
+			return fmt.Errorf("failed to find plugin: %w", err)
+		}
+
+		appliedVolume, err := plugin.Apply(ctx, vol, machine)
+		if err != nil {
+			return fmt.Errorf("failed to apply volume: %w", err)
+		}
+
+		_ = appliedVolume
+	}
 
 	// img, err := r.imageCache.Get(ctx, *machine.Spec.Image)
 	// _ = img
