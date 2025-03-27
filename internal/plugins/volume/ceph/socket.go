@@ -7,9 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"os"
-	"syscall"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -27,21 +25,6 @@ func isSocketPresent(socketPath string) (bool, error) {
 	if stat.Mode().Type()&os.ModeSocket == 0 {
 		return false, fmt.Errorf("file at %s is not a socket", socketPath)
 	}
-	return true, nil
-}
-
-func isSocketActive(socketPath string) (bool, error) {
-	conn, err := net.Dial("unix", socketPath)
-	if err != nil {
-		if errors.Is(err, syscall.ECONNREFUSED) {
-			return false, nil
-		}
-		return false, err
-	}
-	defer func() {
-		_ = conn.Close()
-	}()
-
 	return true, nil
 }
 

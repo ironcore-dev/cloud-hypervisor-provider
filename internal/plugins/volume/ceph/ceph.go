@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -14,6 +15,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"k8s.io/utils/ptr"
+	utilstrings "k8s.io/utils/strings"
 )
 
 const (
@@ -222,9 +224,10 @@ func (p *plugin) validateVolume(spec *api.VolumeSpec) (vData *validatedVolume, e
 
 func (p *plugin) Delete(ctx context.Context, computeVolumeName string, machineID string) error {
 	if err := p.provider.Unmount(ctx, machineID, computeVolumeName); err != nil {
-		fmt.Printf("failed to unmount volume %q: %v", computeVolumeName, err)
+		return fmt.Errorf("failed to unmount volume %q: %w", computeVolumeName, err)
 	}
-	return nil
+
+	return os.RemoveAll(p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), computeVolumeName))
 }
 
 func (p *plugin) GetSize(ctx context.Context, spec *api.VolumeSpec) (int64, error) {

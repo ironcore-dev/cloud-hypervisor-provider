@@ -220,6 +220,8 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 			return fmt.Errorf("failed to apply volume: %w", err)
 		}
 
+		_ = plugin.Delete(ctx, appliedVolume.Handle, machine.ID)
+
 		_ = appliedVolume
 	}
 

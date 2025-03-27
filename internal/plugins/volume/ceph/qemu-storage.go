@@ -5,6 +5,7 @@ package ceph
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -42,23 +43,20 @@ func (q *QemuStorage) Mount(ctx context.Context, machineID string, volume *valid
 		return "", fmt.Errorf("error checking if %s is a socket: %w", socketPath, err)
 	}
 
-	var active bool
-	if present {
-		log.V(2).Info("Checking if socket is active", "path", socketPath)
-		active, err = isSocketActive(socketPath)
-		if err != nil {
-			return "", fmt.Errorf("error checking if %s is a active socket: %w", socketPath, err)
-		}
-	}
-
 	log.V(2).Info("Checking ceph conf")
 	confPath, err := q.createCephConf(log, machineID, volume)
 	if err != nil {
 		return "", fmt.Errorf("error creating ceph conf: %w", err)
 	}
 
-	if !present || !active {
-		log.V(1).Info("qemu-storage-daemon socket is not present, create it", "path", socketPath)
+	log.V(2).Info("Checking if daemon is running")
+	running, err := q.isDaemonRunning(machineID, volume.handle)
+	if err != nil {
+		return "", fmt.Errorf("error checking if daemon is running: %w", err)
+	}
+
+	if !present || !running {
+		log.V(1).Info("Starting qemu-storage-daemon")
 		if err := q.startDaemon(ctx, log, machineID, socketPath, confPath, volume); err != nil {
 			return "", fmt.Errorf("error starting qemu-storage-daemon: %w", err)
 		}
@@ -67,14 +65,36 @@ func (q *QemuStorage) Mount(ctx context.Context, machineID string, volume *valid
 	return socketPath, nil
 }
 
+func (q *QemuStorage) Unmount(ctx context.Context, machineID, volumeID string) error {
+	log := q.log.WithValues("machineID", machineID, "volumeID", volumeID)
+
+	log.V(1).Info("Check if deamon is running")
+	running, err := q.isDaemonRunning(machineID, volumeID)
+	if err != nil {
+		return fmt.Errorf("error checking if deamon is running: %w", err)
+	}
+
+	if !running {
+		log.V(1).Info("Deamon is not running, done")
+		return nil
+	}
+
+	log.V(1).Info("Stop deamon")
+	if err := q.stopDaemon(machineID, volumeID); err != nil {
+		return fmt.Errorf("error stopping deamon: %w", err)
+	}
+
+	return nil
+}
+
 func (q *QemuStorage) createCephConf(log logr.Logger, machineID string, volume *validatedVolume) (string, error) {
 	confPath := filepath.Join(
 		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle),
-		"conf",
+		"ceph.conf",
 	)
 	keyPath := filepath.Join(
 		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle),
-		"key",
+		"ceph.key",
 	)
 
 	log.V(2).Info("Creating ceph conf", "confPath", confPath)
@@ -84,10 +104,10 @@ func (q *QemuStorage) createCephConf(log logr.Logger, machineID string, volume *
 	}
 
 	confData := fmt.Sprintf(
-		"[global]\nmon_host = %s \n\n[client.%s]\nkeyring = %s",
+		"[global]\nmon_host = %s \n\n[client.%s]\nkeyring = %s\n",
 		strings.Join(volume.monitors, ","),
 		volume.userID,
-		"./key",
+		"./ceph.key",
 	)
 	_, err = confFile.WriteString(confData)
 	if err != nil {
@@ -100,7 +120,7 @@ func (q *QemuStorage) createCephConf(log logr.Logger, machineID string, volume *
 		return "", fmt.Errorf("error opening key file %s: %w", keyPath, err)
 	}
 
-	keyData := fmt.Sprintf("[client.%s]\nkey = %s", volume.userID, volume.userKey)
+	keyData := fmt.Sprintf("[client.%s]\nkey = %s\n", volume.userID, volume.userKey)
 	_, err = keyFile.WriteString(keyData)
 	if err != nil {
 		return "", fmt.Errorf("error writing to key file %s: %w", keyPath, err)
@@ -131,19 +151,20 @@ func (q *QemuStorage) startDaemon(
 			volume.pool,
 			volume.image,
 			volume.userID,
-			confPath,
+			"./ceph.conf",
 		),
 		"--export",
 		fmt.Sprintf(
 			"vhost-user-blk,id=%s,node-name=%s,addr.type=unix,addr.path=%s,writable=on",
-			volume.handle,
-			volume.handle,
-			socket,
+			"rbd0",
+			"rbd0",
+			"./socket",
 		),
 	}
 
 	log.V(1).Info("Start qemu-storage-daemon", "cmd", cmd)
 	process := exec.Command(cmd[0], cmd[1:]...)
+	process.Dir = q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle)
 
 	if q.detach {
 		process.SysProcAttr = &syscall.SysProcAttr{
@@ -161,6 +182,12 @@ func (q *QemuStorage) startDaemon(
 
 	log.V(2).Info("Wait for socket", "path", socket)
 	if err := waitForSocketWithTimeout(ctx, 2*time.Second, socket); err != nil {
+		if process.Process != nil {
+			if err := process.Process.Kill(); err != nil {
+				log.V(1).Info("failed to kill qemu-storage-daemon")
+			}
+		}
+
 		return fmt.Errorf("error waiting for socket: %w", err)
 	}
 
@@ -170,7 +197,7 @@ func (q *QemuStorage) startDaemon(
 		return fmt.Errorf("error opening conf file %s: %w", pidPath, err)
 	}
 
-	if _, err := fmt.Fprintf(pidFile, "[client.%s]\n", volume.userID); err != nil {
+	if _, err := fmt.Fprintf(pidFile, "%d", process.Process.Pid); err != nil {
 		return fmt.Errorf("error writing to pid file %s: %w", confPath, err)
 	}
 
@@ -184,36 +211,54 @@ func (q *QemuStorage) pidFilePath(machineID, volumeHandle string) string {
 	)
 }
 
-func (q *QemuStorage) Unmount(ctx context.Context, machineID, volumeID string) error {
-	log := q.log.WithValues("machineID", machineID, "volumeID", volumeID)
-	socketPath := filepath.Join(
-		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volumeID),
-		"socket",
-	)
-
-	log.V(2).Info("Checking if socket is present", "path", socketPath)
-	present, err := isSocketPresent(socketPath)
-	if err != nil {
-		return fmt.Errorf("error checking if %s is a socket: %w", socketPath, err)
-	}
-
-	if !present {
-		return nil
-	}
-
-	pidPath := q.pidFilePath(machineID, volumeID)
+func getPidFromFile(pidPath string) (int, error) {
 	pidFile, err := os.ReadFile(pidPath)
 	if err != nil {
-		return fmt.Errorf("error opening conf file %s: %w", pidPath, err)
+		return 0, fmt.Errorf("error opening conf file %s: %w", pidPath, err)
 	}
 
 	pid, err := strconv.Atoi(string(pidFile))
 	if err != nil {
-		return fmt.Errorf("error parsing pid file %s: %w", pidPath, err)
+		return 0, fmt.Errorf("error parsing pid file %s: %w", pidPath, err)
 	}
 
-	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
-		return fmt.Errorf("error sending SIGKILL to %s: %w", socketPath, err)
+	return pid, nil
+}
+
+func (q *QemuStorage) isDaemonRunning(machineID, volumeHandle string) (bool, error) {
+	pid, err := getPidFromFile(q.pidFilePath(machineID, volumeHandle))
+	if err != nil {
+		return false, fmt.Errorf("faild to get pid from file: %w", err)
+	}
+
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false, nil
+	}
+
+	if err := p.Signal(syscall.Signal(0)); err != nil {
+		if errors.Is(err, os.ErrProcessDone) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to signal process: %w", err)
+	}
+
+	return true, nil
+}
+
+func (q *QemuStorage) stopDaemon(machineID, volumeHandle string) error {
+	pid, err := getPidFromFile(q.pidFilePath(machineID, volumeHandle))
+	if err != nil {
+		return fmt.Errorf("faild to get pid from file: %w", err)
+	}
+
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return nil
+	}
+
+	if err := p.Kill(); err != nil {
+		return fmt.Errorf("faild to kill process: %w", err)
 	}
 
 	return nil
