@@ -1,6 +1,7 @@
 module github.com/ironcore-dev/cloud-hypervisor-provider
 
 go 1.24
+toolchain go1.24.1
 
 require (
 	github.com/blang/semver/v4 v4.0.0
@@ -9,7 +10,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/google/uuid v1.6.0
 	github.com/ironcore-dev/controller-utils v0.9.8
-	github.com/ironcore-dev/ironcore v0.2.2
+	github.com/ironcore-dev/ironcore v0.2.3
 	github.com/ironcore-dev/ironcore-image v0.2.4
 	github.com/ironcore-dev/provider-utils v0.0.0-20250306151636-96670e489568
 	github.com/onsi/ginkgo/v2 v2.23.3
