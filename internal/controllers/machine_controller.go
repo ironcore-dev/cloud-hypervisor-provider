@@ -14,6 +14,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	ociImage "github.com/ironcore-dev/cloud-hypervisor-provider/internal/oci"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/osutils"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
@@ -193,6 +194,10 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 	}
 	log.V(1).Info("Successfully made machine directories")
 
+	if requeue, err := r.reconcileImage(ctx, log, machine); err != nil || requeue {
+		return err
+	}
+
 	if err := r.vmm.InitVMM(ctx, id); err != nil {
 		return fmt.Errorf("failed to init vmm: %w", err)
 	}
@@ -200,6 +205,8 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 	if err := r.vmm.Ping(ctx, machine.ID); err != nil {
 		return fmt.Errorf("failed to ping vmm: %w", err)
 	}
+
+	_ = r.vmm.CreateVM(ctx, machine)
 
 	//vm, err := r.vmm.GetVM(ctx, machine.ID)
 	//if err != nil {
@@ -225,8 +232,44 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		_ = appliedVolume
 	}
 
-	// img, err := r.imageCache.Get(ctx, *machine.Spec.Image)
-	// _ = img
-
 	return nil
+}
+
+func (r *MachineReconciler) reconcileImage(
+	ctx context.Context,
+	log logr.Logger,
+	machine *api.Machine,
+) (bool, error) {
+	image := ptr.Deref(machine.Spec.Image, "")
+	if image == "" {
+		log.V(2).Info("No image in machine set, skip fetch")
+		return false, nil
+	}
+
+	img, err := r.imageCache.Get(ctx, image)
+	if err != nil {
+		if errors.Is(err, ociImage.ErrImagePulling) {
+			log.V(1).Info("Image not in cache", "image", image)
+			return true, nil
+		}
+
+		return false, fmt.Errorf("failed to get image from cache: %w", err)
+	}
+
+	log.V(1).Info("Image in cache", "image", image)
+	rootFSFile := r.paths.MachineRootFSFile(machine.ID)
+	ok, err := osutils.RegularFileExists(rootFSFile)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		if err := r.raw.Create(rootFSFile, raw.WithSourceFile(img.RootFS.Path)); err != nil {
+			return false, fmt.Errorf("error creating root fs disk: %w", err)
+		}
+		//if err := os.Chmod(rootFSFile, 0666); err != nil {
+		//	return false, fmt.Errorf("error changing root fs disk mode: %w", err)
+		//}
+	}
+
+	return false, nil
 }

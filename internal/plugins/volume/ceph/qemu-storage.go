@@ -228,6 +228,9 @@ func getPidFromFile(pidPath string) (int, error) {
 func (q *QemuStorage) isDaemonRunning(machineID, volumeHandle string) (bool, error) {
 	pid, err := getPidFromFile(q.pidFilePath(machineID, volumeHandle))
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
 		return false, fmt.Errorf("faild to get pid from file: %w", err)
 	}
 

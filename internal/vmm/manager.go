@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +29,7 @@ const (
 
 type ManagerOptions struct {
 	CloudHypervisorBin string
+	FirmwarePath       string
 	Logger             logr.Logger
 
 	DetachVms bool
@@ -39,6 +42,7 @@ func NewManager(paths host.Paths, opts ManagerOptions) *Manager {
 
 		paths:              paths,
 		cloudHypervisorBin: opts.CloudHypervisorBin,
+		firmwarePath:       opts.FirmwarePath,
 		log:                opts.Logger,
 		detachVms:          opts.DetachVms,
 	}
@@ -52,6 +56,7 @@ type Manager struct {
 
 	paths              host.Paths
 	cloudHypervisorBin string
+	firmwarePath       string
 
 	detachVms bool
 }
@@ -75,6 +80,8 @@ func (m *Manager) initVmm(log logr.Logger, apiSocket string) error {
 		m.cloudHypervisorBin,
 		"--api-socket",
 		apiSocket,
+		//TODO fix
+		"-v",
 	}
 
 	log.V(1).Info("Start cloud-hypervisor", "cmd", chCmd)
@@ -200,7 +207,8 @@ func (m *Manager) GetVM(ctx context.Context, machineId string) (*client.VmInfo, 
 	return res.JSON200, nil
 }
 
-func (m *Manager) CreateVM(ctx context.Context, machineId string) error {
+func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
+	machineId := machine.ID
 	m.idMu.Lock(machineId)
 	defer m.idMu.Unlock(machineId)
 
@@ -211,43 +219,47 @@ func (m *Manager) CreateVM(ctx context.Context, machineId string) error {
 		return ErrNotFound
 	}
 
+	payload := client.PayloadConfig{
+		Cmdline:   nil,
+		Firmware:  ptr.To(m.firmwarePath),
+		HostData:  nil,
+		Igvm:      nil,
+		Initramfs: nil,
+		Kernel:    nil,
+	}
+
+	var disks []client.DiskConfig
+	if ptr.Deref(machine.Spec.Image, "") != "" {
+		disks = append(disks, client.DiskConfig{
+			Path: m.paths.MachineRootFSFile(machineId),
+		})
+	}
+
 	log.V(2).Info("Getting vm")
-	_, err := apiClient.CreateVMWithResponse(ctx, client.CreateVMJSONRequestBody{
-		Balloon:      nil,
-		Console:      nil,
-		Cpus:         nil,
-		DebugConsole: nil,
-		Devices:      nil,
-		Disks: &[]client.DiskConfig{
-			{
-				Id:   ptr.To("a"),
-				Path: "",
-			},
+	resp, err := apiClient.CreateVMWithResponse(ctx, client.CreateVMJSONRequestBody{
+		Cpus: &client.CpusConfig{
+			BootVcpus: int(math.Max(float64(machine.Spec.CpuMillis/1000), 1)),
+			MaxVcpus:  int(math.Max(float64(machine.Spec.CpuMillis/1000), 1)),
 		},
-		Fs:              nil,
-		Iommu:           nil,
-		LandlockEnable:  nil,
-		LandlockRules:   nil,
-		Memory:          nil,
-		Net:             nil,
-		Numa:            nil,
-		Payload:         client.PayloadConfig{},
-		PciSegments:     nil,
-		Platform:        nil,
-		Pmem:            nil,
-		Pvpanic:         nil,
-		RateLimitGroups: nil,
-		Rng:             nil,
-		Serial:          nil,
-		SgxEpc:          nil,
-		Tpm:             nil,
-		Vdpa:            nil,
-		Vsock:           nil,
-		Watchdog:        nil,
+		Devices: nil,
+		Disks:   &disks,
+		Memory: &client.MemoryConfig{
+			Size:   machine.Spec.MemoryBytes,
+			Shared: ptr.To(true),
+		},
+		Console: &client.ConsoleConfig{
+			Mode: "Off",
+		},
+		Serial: &client.ConsoleConfig{
+			Mode: "Tty",
+		},
+		Payload: payload,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to get vm: %w", err)
 	}
+
+	_ = resp
 
 	return nil
 }

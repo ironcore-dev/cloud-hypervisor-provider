@@ -185,7 +185,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	eventRecorder := recorder.NewEventStore(log, recorder.EventStoreOptions{
-		MachineEventMaxEvents:      0,
+		MachineEventMaxEvents:      10,
 		MachineEventTTL:            0,
 		MachineEventResyncInterval: 0,
 	})
@@ -194,6 +194,8 @@ func Run(ctx context.Context, opts Options) error {
 		CloudHypervisorBin: opts.CloudHypervisorBin,
 		Logger:             log.WithName("virtual-machine-manager"),
 		DetachVms:          opts.DetachVms,
+		//TODO fix
+		FirmwarePath: "/home/lukasfrank/stf.fd",
 	})
 
 	machineReconciler, err := controllers.NewMachineReconciler(
