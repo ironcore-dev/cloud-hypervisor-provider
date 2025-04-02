@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"math"
 	"os"
 	"os/exec"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/ironcore/broker/common"

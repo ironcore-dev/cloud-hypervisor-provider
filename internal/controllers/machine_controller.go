@@ -7,12 +7,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"slices"
 	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	ociImage "github.com/ironcore-dev/cloud-hypervisor-provider/internal/oci"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/osutils"
