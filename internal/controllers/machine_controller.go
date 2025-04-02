@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"slices"
 	"sync"
 
@@ -198,7 +199,7 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return err
 	}
 
-	if err := r.vmm.InitVMM(ctx, id); err != nil {
+	if err := r.vmm.InitVMM(ctx, machine.ID); err != nil {
 		return fmt.Errorf("failed to init vmm: %w", err)
 	}
 
@@ -206,31 +207,43 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return fmt.Errorf("failed to ping vmm: %w", err)
 	}
 
-	_ = r.vmm.CreateVM(ctx, machine)
+	vm, err := r.vmm.GetVM(ctx, machine.ID)
+	if err != nil {
+		if errors.Is(err, vmm.ErrVmNotCreated) {
+			log.V(1).Info("VM not created", "machine", machine.ID)
 
-	//vm, err := r.vmm.GetVM(ctx, machine.ID)
-	//if err != nil {
-	//	return fmt.Errorf("failed to ping vmm: %w", err)
-	//}
-	//
-	//_ = vm
+			if err := r.vmm.CreateVM(ctx, machine); err != nil {
+				log.V(1).Info("Failed to create VM", "machine", machine.ID)
+				return fmt.Errorf("failed to create VM: %w", err)
+			}
 
-	if len(machine.Spec.Volumes) > 0 {
-		vol := machine.Spec.Volumes[0]
-		plugin, err := r.VolumePluginManager.FindPluginBySpec(vol)
-		if err != nil {
-			return fmt.Errorf("failed to find plugin: %w", err)
+			log.V(1).Info("Successfully created VM, requeue", "machine", machine.ID)
+			r.queue.Add(machine.ID)
+			return nil
 		}
-
-		appliedVolume, err := plugin.Apply(ctx, vol, machine)
-		if err != nil {
-			return fmt.Errorf("failed to apply volume: %w", err)
-		}
-
-		_ = plugin.Delete(ctx, appliedVolume.Handle, machine.ID)
-
-		_ = appliedVolume
 	}
+
+	switch {
+	case vm.State != client.Running:
+		_ = r.vmm.PowerOn(ctx, machine.ID)
+	}
+
+	//if len(machine.Spec.Volumes) > 0 {
+	//	vol := machine.Spec.Volumes[0]
+	//	plugin, err := r.VolumePluginManager.FindPluginBySpec(vol)
+	//	if err != nil {
+	//		return fmt.Errorf("failed to find plugin: %w", err)
+	//	}
+	//
+	//	appliedVolume, err := plugin.Apply(ctx, vol, machine)
+	//	if err != nil {
+	//		return fmt.Errorf("failed to apply volume: %w", err)
+	//	}
+	//
+	//	_ = plugin.Delete(ctx, appliedVolume.Handle, machine.ID)
+	//
+	//	_ = appliedVolume
+	//}
 
 	return nil
 }

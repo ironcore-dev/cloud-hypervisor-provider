@@ -195,16 +195,19 @@ func (m *Manager) GetVM(ctx context.Context, machineId string) (*client.VmInfo, 
 	}
 
 	log.V(2).Info("Getting vm")
-	res, err := apiClient.GetVmInfoWithResponse(ctx)
+	resp, err := apiClient.GetVmInfoWithResponse(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get vm: %w", err)
 	}
 
-	if res.StatusCode() == 500 && string(res.Body) == "VM is not created" {
-		return nil, ErrVmNotCreated
+	if err := validateStatus(resp.StatusCode()); err != nil {
+		if string(resp.Body) == "VM is not created" {
+			return nil, ErrVmNotCreated
+		}
+		return nil, err
 	}
 
-	return res.JSON200, nil
+	return resp.JSON200, nil
 }
 
 func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
@@ -259,7 +262,57 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 		return fmt.Errorf("failed to get vm: %w", err)
 	}
 
-	_ = resp
+	if err := validateStatus(resp.StatusCode()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Manager) PowerOn(ctx context.Context, machineId string) error {
+	m.idMu.Lock(machineId)
+	defer m.idMu.Unlock(machineId)
+
+	log := m.log.WithValues("machineID", machineId)
+
+	apiClient, found := m.vms[machineId]
+	if !found {
+		return ErrNotFound
+	}
+
+	resp, err := apiClient.BootVMWithResponse(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to boot vm: %w", err)
+	}
+
+	if err := validateStatus(resp.StatusCode()); err != nil {
+		return err
+	}
+	log.V(1).Info("Powered on machine")
+
+	return nil
+}
+
+func (m *Manager) PowerOff(ctx context.Context, machineId string) error {
+	m.idMu.Lock(machineId)
+	defer m.idMu.Unlock(machineId)
+
+	log := m.log.WithValues("machineID", machineId)
+
+	apiClient, found := m.vms[machineId]
+	if !found {
+		return ErrNotFound
+	}
+
+	resp, err := apiClient.ShutdownVMWithResponse(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to shutdown vm: %w", err)
+	}
+
+	if err := validateStatus(resp.StatusCode()); err != nil {
+		return err
+	}
+	log.V(1).Info("Powered off machine")
 
 	return nil
 }
