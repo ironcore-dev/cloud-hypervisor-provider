@@ -49,11 +49,11 @@ func init() {
 type Options struct {
 	Address string
 
-	RootDir string
+	RootDir   string
+	DetachVms bool
 
-	CloudHypervisorBin       string
-	CloudHypervisorRemoteBin string
-	DetachVms                bool
+	CloudHypervisorBinPath      string
+	CloudHypervisorFirmwarePath string
 }
 
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
@@ -67,17 +67,17 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	)
 
 	fs.StringVar(
-		&o.CloudHypervisorBin,
-		"cloud-hypervisor-provider-bin",
+		&o.CloudHypervisorBinPath,
+		"cloud-hypervisor-bin-path",
 		"",
-		"Path to the cloud-hypervisor  binary.",
+		"Path to the cloud-hypervisor binary.",
 	)
 
 	fs.StringVar(
-		&o.CloudHypervisorRemoteBin,
-		"cloud-hypervisor-remote-bin",
+		&o.CloudHypervisorFirmwarePath,
+		"cloud-hypervisor-firmware-path",
 		"",
-		"Path to the cloud-hypervisor remote binary.",
+		"Path to the cloud-hypervisor firmware.",
 	)
 
 	fs.BoolVar(
@@ -184,18 +184,13 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	eventRecorder := recorder.NewEventStore(log, recorder.EventStoreOptions{
-		MachineEventMaxEvents:      10,
-		MachineEventTTL:            0,
-		MachineEventResyncInterval: 0,
-	})
+	eventRecorder := recorder.NewEventStore(log, recorder.EventStoreOptions{})
 
 	virtualMachineManager := vmm.NewManager(hostPaths, vmm.ManagerOptions{
-		CloudHypervisorBin: opts.CloudHypervisorBin,
+		CloudHypervisorBin: opts.CloudHypervisorBinPath,
 		Logger:             log.WithName("virtual-machine-manager"),
 		DetachVms:          opts.DetachVms,
-		//TODO fix
-		FirmwarePath: "/home/lukasfrank/stf.fd",
+		FirmwarePath:       opts.CloudHypervisorFirmwarePath,
 	})
 
 	machineReconciler, err := controllers.NewMachineReconciler(
