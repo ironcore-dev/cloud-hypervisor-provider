@@ -234,8 +234,25 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 	var disks []client.DiskConfig
 	if ptr.Deref(machine.Spec.Image, "") != "" {
 		disks = append(disks, client.DiskConfig{
-			Path: m.paths.MachineRootFSFile(machineId),
+			Path: ptr.To(m.paths.MachineRootFSFile(machineId)),
 		})
+	}
+
+	for _, vol := range machine.Status.VolumeStatus {
+		disk := client.DiskConfig{
+			Id: ptr.To(vol.Handle),
+		}
+
+		switch vol.Type {
+		case api.VolumeSocketType:
+			disk.VhostUser = ptr.To(true)
+			disk.VhostSocket = ptr.To(vol.Path)
+			disk.Readonly = ptr.To(false)
+		case api.VolumeFileType:
+			disk.Path = ptr.To(vol.Path)
+		}
+
+		disks = append(disks, disk)
 	}
 
 	log.V(2).Info("Getting vm")

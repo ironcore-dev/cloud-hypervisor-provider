@@ -24,24 +24,10 @@ type Plugin interface {
 	GetBackingVolumeID(spec *api.VolumeSpec) (string, error)
 	CanSupport(spec *api.VolumeSpec) bool
 
-	Apply(ctx context.Context, spec *api.VolumeSpec, machine *api.Machine) (*Volume, error)
+	Apply(ctx context.Context, spec *api.VolumeSpec, machineID string) (*api.VolumeStatus, error)
 	Delete(ctx context.Context, computeVolumeName string, machineID string) error
 
 	GetSize(ctx context.Context, spec *api.VolumeSpec) (int64, error)
-}
-
-type Type string
-
-const (
-	SocketType Type = "socket"
-	FileType   Type = "file"
-)
-
-type Volume struct {
-	Type   Type
-	Path   string
-	Handle string
-	Size   int64
 }
 
 type PluginManager struct {

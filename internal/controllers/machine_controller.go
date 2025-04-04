@@ -207,6 +207,28 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return fmt.Errorf("failed to ping vmm: %w", err)
 	}
 
+	var updatedVolumeStatus []api.VolumeStatus
+	for _, vol := range machine.Spec.Volumes {
+		plugin, err := r.VolumePluginManager.FindPluginBySpec(vol)
+		if err != nil {
+			return fmt.Errorf("failed to find plugin: %w", err)
+		}
+
+		appliedVolume, err := plugin.Apply(ctx, vol, machine.ID)
+		if err != nil {
+			return fmt.Errorf("failed to apply volume: %w", err)
+		}
+
+		//TODO handle later detach volume
+		updatedVolumeStatus = append(updatedVolumeStatus, *appliedVolume)
+	}
+	machine.Status.VolumeStatus = updatedVolumeStatus
+
+	machine, err = r.machines.Update(ctx, machine)
+	if err != nil {
+		return fmt.Errorf("failed to update machine status: %w", err)
+	}
+
 	vm, err := r.vmm.GetVM(ctx, machine.ID)
 	if err != nil {
 		if errors.Is(err, vmm.ErrVmNotCreated) {
@@ -227,23 +249,6 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 	case vm.State != client.Running:
 		_ = r.vmm.PowerOn(ctx, machine.ID)
 	}
-
-	//if len(machine.Spec.Volumes) > 0 {
-	//	vol := machine.Spec.Volumes[0]
-	//	plugin, err := r.VolumePluginManager.FindPluginBySpec(vol)
-	//	if err != nil {
-	//		return fmt.Errorf("failed to find plugin: %w", err)
-	//	}
-	//
-	//	appliedVolume, err := plugin.Apply(ctx, vol, machine)
-	//	if err != nil {
-	//		return fmt.Errorf("failed to apply volume: %w", err)
-	//	}
-	//
-	//	_ = plugin.Delete(ctx, appliedVolume.Handle, machine.ID)
-	//
-	//	_ = appliedVolume
-	//}
 
 	return nil
 }

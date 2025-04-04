@@ -18,7 +18,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/ironcore/broker/common"
-	utilstrings "k8s.io/utils/strings"
 )
 
 type QemuStorage struct {
@@ -29,7 +28,7 @@ type QemuStorage struct {
 }
 
 func (q *QemuStorage) Mount(ctx context.Context, machineID string, volume *validatedVolume) (string, error) {
-	volumeDir := q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle)
+	volumeDir := q.volumeDir(machineID, volume.handle)
 	if err := os.MkdirAll(volumeDir, os.ModePerm); err != nil {
 		return "", err
 	}
@@ -89,11 +88,11 @@ func (q *QemuStorage) Unmount(ctx context.Context, machineID, volumeID string) e
 
 func (q *QemuStorage) createCephConf(log logr.Logger, machineID string, volume *validatedVolume) (string, error) {
 	confPath := filepath.Join(
-		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle),
+		q.volumeDir(machineID, volume.handle),
 		"ceph.conf",
 	)
 	keyPath := filepath.Join(
-		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle),
+		q.volumeDir(machineID, volume.handle),
 		"ceph.key",
 	)
 
@@ -164,7 +163,7 @@ func (q *QemuStorage) startDaemon(
 
 	log.V(1).Info("Start qemu-storage-daemon", "cmd", cmd)
 	process := exec.Command(cmd[0], cmd[1:]...)
-	process.Dir = q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volume.handle)
+	process.Dir = q.volumeDir(machineID, volume.handle)
 
 	if q.detach {
 		process.SysProcAttr = &syscall.SysProcAttr{
@@ -206,7 +205,7 @@ func (q *QemuStorage) startDaemon(
 
 func (q *QemuStorage) pidFilePath(machineID, volumeHandle string) string {
 	return filepath.Join(
-		q.paths.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), volumeHandle),
+		q.volumeDir(machineID, volumeHandle),
 		"pid",
 	)
 }
@@ -217,7 +216,7 @@ func getPidFromFile(pidPath string) (int, error) {
 		return 0, fmt.Errorf("error opening conf file %s: %w", pidPath, err)
 	}
 
-	pid, err := strconv.Atoi(string(pidFile))
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidFile)))
 	if err != nil {
 		return 0, fmt.Errorf("error parsing pid file %s: %w", pidPath, err)
 	}
@@ -265,4 +264,8 @@ func (q *QemuStorage) stopDaemon(machineID, volumeHandle string) error {
 	}
 
 	return nil
+}
+
+func (q *QemuStorage) volumeDir(machineID string, volumeHandle string) string {
+	return q.paths.MachineVolumeDir(machineID, cephDriverName, volumeHandle)
 }

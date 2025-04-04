@@ -64,6 +64,8 @@ type VolumeSpec struct {
 
 type VolumeStatus struct {
 	Name   string      `json:"name,omitempty"`
+	Type   VolumeType  `json:"type,omitempty"`
+	Path   string      `json:"path,omitempty"`
 	Handle string      `json:"handle,omitempty"`
 	State  VolumeState `json:"state,omitempty"`
 	Size   int64       `json:"size,omitempty"`
@@ -86,6 +88,13 @@ type VolumeState string
 const (
 	VolumeStatePending  VolumeState = "Pending"
 	VolumeStateAttached VolumeState = "Attached"
+)
+
+type VolumeType string
+
+const (
+	VolumeSocketType VolumeType = "socket"
+	VolumeFileType   VolumeType = "file"
 )
 
 type NetworkInterfaceSpec struct {

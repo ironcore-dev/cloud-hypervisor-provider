@@ -130,7 +130,7 @@ type DiskConfig struct {
 	Id             *string              `json:"id,omitempty"`
 	Iommu          *bool                `json:"iommu,omitempty"`
 	NumQueues      *int                 `json:"num_queues,omitempty"`
-	Path           string               `json:"path"`
+	Path           *string              `json:"path"`
 	PciSegment     *int16               `json:"pci_segment,omitempty"`
 	QueueAffinity  *[]VirtQueueAffinity `json:"queue_affinity,omitempty"`
 	QueueSize      *int                 `json:"queue_size,omitempty"`

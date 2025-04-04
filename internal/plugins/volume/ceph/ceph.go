@@ -15,7 +15,6 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"k8s.io/utils/ptr"
-	utilstrings "k8s.io/utils/strings"
 )
 
 const (
@@ -157,13 +156,13 @@ func readVolumeAttributes(attrs map[string]string, volumeData *validatedVolume) 
 	return nil
 }
 
-func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machine *api.Machine) (*volume.Volume, error) {
+func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machineID string) (*api.VolumeStatus, error) {
 	volumeData, err := p.validateVolume(spec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get volume data: %w", err)
 	}
 
-	path, err := p.provider.Mount(ctx, machine.ID, volumeData)
+	path, err := p.provider.Mount(ctx, machineID, volumeData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to mount volume: %w", err)
 	}
@@ -173,11 +172,14 @@ func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machine *api.M
 		return nil, fmt.Errorf("failed to get volume size: %w", err)
 	}
 
-	return &volume.Volume{
-		Type:   volume.SocketType,
+	return &api.VolumeStatus{
+		Name:   spec.Name,
+		Type:   api.VolumeSocketType,
 		Path:   path,
 		Handle: volumeData.handle,
-		Size:   volumeSize,
+		//TODO
+		State: "",
+		Size:  volumeSize,
 	}, nil
 }
 
@@ -227,7 +229,7 @@ func (p *plugin) Delete(ctx context.Context, computeVolumeName string, machineID
 		return fmt.Errorf("failed to unmount volume %q: %w", computeVolumeName, err)
 	}
 
-	return os.RemoveAll(p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), computeVolumeName))
+	return os.RemoveAll(p.host.MachineVolumeDir(machineID, cephDriverName, computeVolumeName))
 }
 
 func (p *plugin) GetSize(ctx context.Context, spec *api.VolumeSpec) (int64, error) {

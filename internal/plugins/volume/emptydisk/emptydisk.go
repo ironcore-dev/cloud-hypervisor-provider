@@ -62,8 +62,8 @@ func (p *plugin) diskFilename(computeVolumeName string, machineID string) string
 	)
 }
 
-func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machine *api.Machine) (*volume.Volume, error) {
-	volumeDir := p.host.MachineVolumeDir(machine.ID, utilstrings.EscapeQualifiedName(pluginName), spec.Name)
+func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machineID string) (*api.VolumeStatus, error) {
+	volumeDir := p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), spec.Name)
 	if err := os.MkdirAll(volumeDir, os.ModePerm); err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machine *api.M
 		size = defaultSize
 	}
 
-	diskFilename := p.diskFilename(spec.Name, machine.ID)
+	diskFilename := p.diskFilename(spec.Name, machineID)
 	if _, err := os.Stat(diskFilename); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("error stat-ing disk: %w", err)
@@ -91,7 +91,15 @@ func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machine *api.M
 			return nil, fmt.Errorf("error changing disk file mode: %w", err)
 		}
 	}
-	return &volume.Volume{Type: volume.FileType, Path: diskFilename, Handle: handle, Size: size}, nil
+	return &api.VolumeStatus{
+		Name:   spec.Name,
+		Type:   api.VolumeFileType,
+		Path:   diskFilename,
+		Handle: handle,
+		//TODO
+		State: "",
+		Size:  size,
+	}, nil
 }
 
 func (p *plugin) Delete(ctx context.Context, computeVolumeName string, machineID string) error {
