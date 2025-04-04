@@ -20,6 +20,7 @@ path = [
     "mkdocs.yml",
     "hack/**.sh",
     "mkdocs.yml",
+    "cloud-hypervisor/cloud-hypervisor.yaml",
     "cloud-hypervisor/client/**"
 ]
 precedence = "aggregate"
