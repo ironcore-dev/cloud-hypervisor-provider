@@ -16,6 +16,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/controllers"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/oci"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/ceph"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
@@ -54,6 +55,8 @@ type Options struct {
 
 	CloudHypervisorBinPath      string
 	CloudHypervisorFirmwarePath string
+
+	NicPlugin *networkinterface.Options
 }
 
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
@@ -87,6 +90,8 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 		"Detach VMs processes from manager process.",
 	)
 
+	o.NicPlugin = networkinterface.NewDefaultOptions()
+	o.NicPlugin.AddFlags(fs)
 }
 
 func Command() *cobra.Command {
@@ -164,6 +169,20 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
+	nicPlugin, nicPluginCleanup, err := opts.NicPlugin.NetworkInterfacePlugin()
+	if err != nil {
+		setupLog.Error(err, "failed to initialize network plugin")
+		return err
+	}
+	if nicPluginCleanup != nil {
+		defer nicPluginCleanup()
+	}
+
+	if err := nicPlugin.Init(hostPaths); err != nil {
+		setupLog.Error(err, "failed to initialize network plugin")
+		return err
+	}
+
 	machineStore, err := hostutils.NewStore[*api.Machine](hostutils.Options[*api.Machine]{
 		Dir:            hostPaths.MachineStoreDir(),
 		NewFunc:        func() *api.Machine { return &api.Machine{} },
@@ -200,6 +219,7 @@ func Run(ctx context.Context, opts Options) error {
 		eventRecorder,
 		virtualMachineManager,
 		pluginManager,
+		nicPlugin,
 		controllers.MachineReconcilerOptions{
 			ImageCache: imgCache,
 			Raw:        rawInst,

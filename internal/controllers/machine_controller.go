@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
 	"slices"
 	"sync"
 
@@ -45,6 +46,7 @@ func NewMachineReconciler(
 	eventRecorder recorder.EventRecorder,
 	vmm *vmm.Manager,
 	volumePluginManager *volume.PluginManager,
+	nicPlugin networkinterface.Plugin,
 	opts MachineReconcilerOptions,
 ) (*MachineReconciler, error) {
 	if machines == nil {
@@ -60,14 +62,15 @@ func NewMachineReconciler(
 		queue: workqueue.NewTypedRateLimitingQueue[string](
 			workqueue.DefaultTypedControllerRateLimiter[string](),
 		),
-		machines:            machines,
-		machineEvents:       machineEvents,
-		EventRecorder:       eventRecorder,
-		imageCache:          opts.ImageCache,
-		raw:                 opts.Raw,
-		paths:               opts.Paths,
-		vmm:                 vmm,
-		VolumePluginManager: volumePluginManager,
+		machines:               machines,
+		machineEvents:          machineEvents,
+		EventRecorder:          eventRecorder,
+		imageCache:             opts.ImageCache,
+		raw:                    opts.Raw,
+		paths:                  opts.Paths,
+		vmm:                    vmm,
+		VolumePluginManager:    volumePluginManager,
+		networkInterfacePlugin: nicPlugin,
 	}, nil
 }
 
@@ -82,7 +85,8 @@ type MachineReconciler struct {
 
 	vmm *vmm.Manager
 
-	VolumePluginManager *volume.PluginManager
+	VolumePluginManager    *volume.PluginManager
+	networkInterfacePlugin networkinterface.Plugin
 
 	machines      store.Store[*api.Machine]
 	machineEvents event.Source[*api.Machine]
