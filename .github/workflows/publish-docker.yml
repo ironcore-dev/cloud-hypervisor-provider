@@ -24,6 +24,8 @@ jobs:
         image:
           - name: cloud-hypervisor-provider
             target: cloud-hypervisor-provider
+          - name: cloud-hypervisor-prepare-host
+            target: prepare-host
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

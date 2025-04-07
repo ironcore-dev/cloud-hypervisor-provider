@@ -52,3 +52,18 @@ COPY --from=builder /workspace/bin/irictl-machine .
 USER 65532:65532
 
 ENTRYPOINT ["/cloud-hypervisor-provider"]
+
+
+
+FROM builder AS prepare-host-builder
+
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GO111MODULE=on go build -ldflags="-s -w" -a -o bin/prepare-host \
+    ./cmd/prepare-host
+
+
+FROM gcr.io/distroless/static:nonroot AS prepare-host
+WORKDIR /
+COPY --from=prepare-host-builder /workspace/bin/prepare-host .
+USER 65532:65532
