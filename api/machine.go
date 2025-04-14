@@ -25,17 +25,17 @@ type MachineSpec struct {
 	Image    *string `json:"image"`
 	Ignition []byte  `json:"ignition"`
 
-	Volumes           []*VolumeSpec           `json:"volumes"`
-	NetworkInterfaces []*NetworkInterfaceSpec `json:"networkInterfaces"`
+	Volumes           []*VolumeSpec                  `json:"volumes"`
+	NetworkInterfaces []*MachineNetworkInterfaceSpec `json:"networkInterfaces"`
 
 	ShutdownAt time.Time `json:"shutdownAt,omitempty"`
 }
 
 type MachineStatus struct {
-	VolumeStatus           []VolumeStatus           `json:"volumeStatus"`
-	NetworkInterfaceStatus []NetworkInterfaceStatus `json:"networkInterfaceStatus"`
-	State                  MachineState             `json:"state"`
-	ImageRef               string                   `json:"imageRef"`
+	VolumeStatus           []VolumeStatus                  `json:"volumeStatus"`
+	NetworkInterfaceStatus []MachineNetworkInterfaceStatus `json:"networkInterfaceStatus"`
+	State                  MachineState                    `json:"state"`
+	ImageRef               string                          `json:"imageRef"`
 }
 
 type MachineState string
@@ -97,23 +97,23 @@ const (
 	VolumeFileType   VolumeType = "file"
 )
 
-type NetworkInterfaceSpec struct {
+type MachineNetworkInterfaceSpec struct {
 	Name       string            `json:"name"`
 	NetworkId  string            `json:"networkId"`
 	Ips        []string          `json:"ips"`
 	Attributes map[string]string `json:"attributes"`
+	DeletedAt  *time.Time        `json:"deletedAt,omitempty"`
 }
 
-type NetworkInterfaceStatus struct {
+type MachineNetworkInterfaceStatus struct {
 	Name   string                `json:"name"`
 	Handle string                `json:"handle"`
-	Path   string                `json:"path,omitempty"`
 	State  NetworkInterfaceState `json:"state"`
 }
 
-type NetworkInterfaceState string
+type MachineNetworkInterfaceState string
 
 const (
-	NetworkInterfaceStatePending  NetworkInterfaceState = "Pending"
-	NetworkInterfaceStateAttached NetworkInterfaceState = "Attached"
+	MachineNetworkInterfaceStatePending  MachineNetworkInterfaceState = "Pending"
+	MachineNetworkInterfaceStateAttached MachineNetworkInterfaceState = "Attached"
 )

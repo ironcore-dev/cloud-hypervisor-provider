@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2023 SAP SE or an SAP affiliate company and IronCore contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package apinet
+package options
 
 import (
 	"fmt"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/apinet"
 
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
 	apinetv1alpha1 "github.com/ironcore-dev/ironcore-net/api/core/v1alpha1"
@@ -66,9 +67,9 @@ func (o *apinetOptions) NetworkInterfacePlugin() (networkinterface.Plugin, func(
 		return nil, nil, fmt.Errorf("failed to initialize api-net client: %w", err)
 	}
 
-	return NewPlugin(o.APInetNodeName, apinetClient), nil, nil
+	return apinet.NewPlugin(o.APInetNodeName, apinetClient), nil, nil
 }
 
 func init() {
-	utilruntime.Must(networkinterface.DefaultPluginTypeRegistry.Register(&apinetOptions{}, 1))
+	utilruntime.Must(DefaultPluginTypeRegistry.Register(&apinetOptions{}, 1))
 }

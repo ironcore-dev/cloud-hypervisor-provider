@@ -1,19 +1,20 @@
 // SPDX-FileCopyrightText: 2023 SAP SE or an SAP affiliate company and IronCore contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package networkinterface
+package options
 
 import (
 	"fmt"
 	"sort"
 
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
 	"github.com/spf13/pflag"
 )
 
 type TypeOptions interface {
 	PluginName() string
 	AddFlags(fs *pflag.FlagSet)
-	NetworkInterfacePlugin() (Plugin, func(), error)
+	NetworkInterfacePlugin() (networkinterface.Plugin, func(), error)
 }
 
 type TypeOptionsRegistry struct {
@@ -103,7 +104,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	})
 }
 
-func (o *Options) NetworkInterfacePlugin() (Plugin, func(), error) {
+func (o *Options) NetworkInterfacePlugin() (networkinterface.Plugin, func(), error) {
 	pluginOpts, err := o.registry.PluginTypeOptsByName(o.PluginName)
 	if err != nil {
 		return nil, nil, err

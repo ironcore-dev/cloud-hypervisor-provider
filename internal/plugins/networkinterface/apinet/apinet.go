@@ -154,7 +154,6 @@ func (p *Plugin) Apply(
 	if pciAddress != nil {
 		log.V(1).Info("Host device is ready", "HostDevice", pciAddress)
 		return &api.NetworkInterfaceStatus{
-			Name: spec.Name,
 			Handle: provider.GetNetworkInterfaceID(
 				apinetNic.Namespace,
 				apinetNic.Name,
@@ -188,7 +187,6 @@ func (p *Plugin) Apply(
 	}
 
 	return &api.NetworkInterfaceStatus{
-		Name: spec.Name,
 		Handle: provider.GetNetworkInterfaceID(
 			apinetNic.Namespace,
 			apinetNic.Name,

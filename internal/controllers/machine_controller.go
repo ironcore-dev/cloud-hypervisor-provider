@@ -7,8 +7,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -17,9 +18,11 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	ociImage "github.com/ironcore-dev/cloud-hypervisor-provider/internal/oci"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/osutils"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
+	apiutils "github.com/ironcore-dev/provider-utils/apiutils/api"
 	"github.com/ironcore-dev/provider-utils/eventutils/event"
 	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
 	"github.com/ironcore-dev/provider-utils/storeutils/store"
@@ -90,6 +93,8 @@ type MachineReconciler struct {
 
 	machines      store.Store[*api.Machine]
 	machineEvents event.Source[*api.Machine]
+
+	nics store.Store[*api.NetworkInterface]
 	recorder.EventRecorder
 }
 
@@ -168,6 +173,57 @@ func (r *MachineReconciler) processNextWorkItem(ctx context.Context, log logr.Lo
 	return true
 }
 
+func (r *MachineReconciler) getOrCreateNetworkInterface(
+	ctx context.Context,
+	log logr.Logger,
+	nicID string,
+	machineNic *api.MachineNetworkInterfaceSpec,
+) (*api.NetworkInterface, error) {
+	log.V(2).Info("Getting network interface", "nicID", nicID)
+	nic, err := r.nics.Get(ctx, nicID)
+	if err == nil {
+		return nic, nil
+	}
+
+	if !errors.Is(err, store.ErrNotFound) {
+		return nil, err
+	}
+
+	log.V(2).Info("Network interface not present, create it", "nicID", nicID)
+	nic, err = r.nics.Create(ctx, &api.NetworkInterface{
+		Metadata: apiutils.Metadata{
+			ID: nicID,
+		},
+		Spec: api.NetworkInterfaceSpec{
+			NetworkId:  machineNic.NetworkId,
+			Ips:        machineNic.Ips,
+			Attributes: machineNic.Attributes,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return nic, nil
+}
+
+func getNicID(machineID, nicName string) string {
+	return fmt.Sprintf("%s/%s/%s", "NIC", machineID, nicName)
+}
+
+func getNicName(id string) *string {
+	parts := strings.Split(id, "/")
+	if len(parts) != 3 {
+		return nil
+	}
+
+	if parts[0] == "NIC" {
+		return nil
+	}
+
+	return &parts[2]
+}
+
 func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) error {
 	log := logr.FromContextOrDiscard(ctx)
 
@@ -211,6 +267,23 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return fmt.Errorf("failed to ping vmm: %w", err)
 	}
 
+	nics := make(map[string]*api.NetworkInterface)
+	for _, networkInterface := range machine.Spec.NetworkInterfaces {
+		nicID := getNicID(machine.ID, networkInterface.Name)
+
+		if networkInterface.DeletedAt != nil {
+			log.V(2).Info("NetworkInterface should be deleted: skip creation", "nicID", nicID)
+			continue
+		}
+
+		nic, err := r.getOrCreateNetworkInterface(ctx, log, nicID, networkInterface)
+		if err != nil {
+			return fmt.Errorf("failed to get or create network interface: %w", err)
+		}
+
+		nics[networkInterface.Name] = nic
+	}
+
 	var updatedVolumeStatus []api.VolumeStatus
 	for _, vol := range machine.Spec.Volumes {
 		plugin, err := r.VolumePluginManager.FindPluginBySpec(vol)
@@ -238,7 +311,12 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		if errors.Is(err, vmm.ErrVmNotCreated) {
 			log.V(1).Info("VM not created", "machine", machine.ID)
 
-			if err := r.vmm.CreateVM(ctx, machine); err != nil {
+			if !r.nicsReady(nics) {
+				log.V(1).Info("Not all Network Interfaces are ready")
+				return nil
+			}
+
+			if err := r.vmm.CreateVM(ctx, machine, nics); err != nil {
 				log.V(1).Info("Failed to create VM", "machine", machine.ID)
 				return fmt.Errorf("failed to create VM: %w", err)
 			}
@@ -249,12 +327,66 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		}
 	}
 
+	//power on & power off
 	switch {
 	case vm.State != client.Running:
 		_ = r.vmm.PowerOn(ctx, machine.ID)
 	}
 
+	if err := r.reconcileNics(ctx, log, machine, nics, ptr.Deref(vm.Config.Devices, nil)); err != nil {
+		return fmt.Errorf("failed to reconcile nics: %w", err)
+	}
+
 	return nil
+}
+
+func (r *MachineReconciler) reconcileNics(
+	ctx context.Context,
+	log logr.Logger,
+	machine *api.Machine,
+	desiredNics map[string]*api.NetworkInterface,
+	currentDevices []client.DeviceConfig,
+) error {
+
+	currentNICs := sets.New("")
+
+	for _, device := range currentDevices {
+		deviceID := ptr.Deref(device.Id, "")
+		if getNicName(deviceID) == nil {
+			continue
+		}
+
+		nicName := ptr.Deref(getNicName(deviceID), "")
+
+		if _, ok := desiredNics[nicName]; !ok {
+			log.V(1).Info("Deleting NIC", "device", deviceID, "nicName", nicName)
+			if err := r.vmm.RemoveDevice(ctx, machine.ID, nicName); err != nil {
+				return fmt.Errorf("failed to remove nic: %w", err)
+			}
+		} else {
+			currentNICs.Insert(nicName)
+		}
+	}
+
+	for nicName, nic := range desiredNics {
+		if _, ok := currentNICs[nicName]; !ok {
+			log.V(1).Info("Adding NIC", "device", nicName, "nicName", nicName)
+			if err := r.vmm.AddNIC(ctx, machine.ID, nic); err != nil {
+				return fmt.Errorf("failed to add NIC %s: %w", nicName, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *MachineReconciler) nicsReady(nics map[string]*api.NetworkInterface) bool {
+	for _, nic := range nics {
+		if nic.Status.State != api.NetworkInterfaceStateAttached {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *MachineReconciler) reconcileImage(

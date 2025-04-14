@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -210,7 +211,7 @@ func (m *Manager) GetVM(ctx context.Context, machineId string) (*client.VmInfo, 
 	return resp.JSON200, nil
 }
 
-func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
+func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[string]*api.NetworkInterface) error {
 	machineId := machine.ID
 	m.idMu.Lock(machineId)
 	defer m.idMu.Unlock(machineId)
@@ -255,13 +256,30 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 		disks = append(disks, disk)
 	}
 
-	log.V(2).Info("Getting vm")
+	var dev []client.DeviceConfig
+	for _, nic := range machine.Spec.NetworkInterfaces {
+		attachedNic, found := nics[nic.Name]
+		if !found || attachedNic == nil {
+			return fmt.Errorf("nic %s not found", nic.Name)
+		}
+
+		if attachedNic.Status.State != api.NetworkInterfaceStateAttached {
+			return fmt.Errorf("nic %s is not attached", nic.Name)
+		}
+
+		dev = append(dev, client.DeviceConfig{
+			Id:   ptr.To(nic.Name),
+			Path: attachedNic.Status.Path,
+		})
+	}
+
+	log.V(2).Info("Creating vm")
 	resp, err := apiClient.CreateVMWithResponse(ctx, client.CreateVMJSONRequestBody{
 		Cpus: &client.CpusConfig{
 			BootVcpus: int(math.Max(float64(machine.Spec.CpuMillis/1000), 1)),
 			MaxVcpus:  int(math.Max(float64(machine.Spec.CpuMillis/1000), 1)),
 		},
-		Devices: nil,
+		Devices: &dev,
 		Disks:   &disks,
 		Memory: &client.MemoryConfig{
 			Size:   machine.Spec.MemoryBytes,
@@ -282,6 +300,68 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 	if err := validateStatus(resp.StatusCode()); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (m *Manager) RemoveDevice(ctx context.Context, machineId string, deviceID string) error {
+	m.idMu.Lock(machineId)
+	defer m.idMu.Unlock(machineId)
+
+	log := m.log.WithValues("machineID", machineId)
+
+	apiClient, found := m.vms[machineId]
+	if !found {
+		return ErrNotFound
+	}
+
+	resp, err := apiClient.PutVmRemoveDeviceWithResponse(ctx, client.PutVmRemoveDeviceJSONRequestBody{
+		Id: ptr.To(deviceID),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to remove device: %w", err)
+	}
+
+	if err := validateStatus(resp.StatusCode()); err != nil {
+		return err
+	}
+	log.V(1).Info("Removed device from on machine", "deviceID", deviceID)
+
+	return nil
+}
+
+func (m *Manager) AddNIC(ctx context.Context, machineId string, nic *api.NetworkInterface) error {
+	m.idMu.Lock(machineId)
+	defer m.idMu.Unlock(machineId)
+
+	log := m.log.WithValues("machineID", machineId)
+
+	if nic.Status.State != api.NetworkInterfaceStateAttached {
+		return fmt.Errorf("nic %s is not attached", nic.ID)
+	}
+
+	nicName, err := getNicName(nic.ID)
+	if err != nil {
+		return err
+	}
+
+	apiClient, found := m.vms[machineId]
+	if !found {
+		return ErrNotFound
+	}
+
+	resp, err := apiClient.PutVmAddDeviceWithResponse(ctx, client.DeviceConfig{
+		Id:   ptr.To(nicName),
+		Path: nic.Status.Path,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to remove device: %w", err)
+	}
+
+	if err := validateStatus(resp.StatusCode()); err != nil {
+		return err
+	}
+	log.V(1).Info("Added device", "nicName", nicName)
 
 	return nil
 }
@@ -332,4 +412,17 @@ func (m *Manager) PowerOff(ctx context.Context, machineId string) error {
 	log.V(1).Info("Powered off machine")
 
 	return nil
+}
+
+func getNicName(id string) (string, error) {
+	parts := strings.Split(id, "/")
+	if len(parts) != 3 {
+		return "", errors.New("invalid nic name")
+	}
+
+	if parts[0] == "NIC" {
+		return "", errors.New("invalid nic name")
+	}
+
+	return parts[2], nil
 }

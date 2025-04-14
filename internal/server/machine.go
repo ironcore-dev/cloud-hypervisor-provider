@@ -264,12 +264,12 @@ func (s *Server) getVolumeFromIRIVolume(iriVolume *iri.Volume) (*api.VolumeSpec,
 	return volumeSpec, nil
 }
 
-func (s *Server) getNICFromIRINIC(iriNIC *iri.NetworkInterface) (*api.NetworkInterfaceSpec, error) {
+func (s *Server) getNICFromIRINIC(iriNIC *iri.NetworkInterface) (*api.MachineNetworkInterfaceSpec, error) {
 	if iriNIC == nil {
 		return nil, fmt.Errorf("networkInterface is nil")
 	}
 
-	return &api.NetworkInterfaceSpec{
+	return &api.MachineNetworkInterfaceSpec{
 		Name:       iriNIC.Name,
 		NetworkId:  iriNIC.NetworkId,
 		Ips:        iriNIC.Ips,

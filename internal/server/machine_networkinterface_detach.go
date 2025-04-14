@@ -27,7 +27,7 @@ func (s *Server) DetachNetworkInterface(
 		return nil, fmt.Errorf("failed to get machine: %w", err)
 	}
 
-	var updatedNICS []*api.NetworkInterfaceSpec
+	var updatedNICS []*api.MachineNetworkInterfaceSpec
 	found := false
 	for _, nic := range apiMachine.Spec.NetworkInterfaces {
 		if nic.Name != req.Name {

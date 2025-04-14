@@ -7,6 +7,7 @@ import (
 	"context"
 	goflag "flag"
 	"fmt"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/options"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/controllers"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/oci"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/ceph"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
@@ -56,7 +56,7 @@ type Options struct {
 	CloudHypervisorBinPath      string
 	CloudHypervisorFirmwarePath string
 
-	NicPlugin *networkinterface.Options
+	NicPlugin *options.Options
 }
 
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
@@ -90,7 +90,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 		"Detach VMs processes from manager process.",
 	)
 
-	o.NicPlugin = networkinterface.NewDefaultOptions()
+	o.NicPlugin = options.NewDefaultOptions()
 	o.NicPlugin.AddFlags(fs)
 }
 
