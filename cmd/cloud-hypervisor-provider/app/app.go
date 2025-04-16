@@ -203,6 +203,26 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
+	nicStore, err := hostutils.NewStore[*api.NetworkInterface](hostutils.Options[*api.NetworkInterface]{
+		Dir:            hostPaths.NICStoreDir(),
+		NewFunc:        func() *api.NetworkInterface { return &api.NetworkInterface{} },
+		CreateStrategy: strategy.NetworkInterfaceStrategy,
+	})
+	if err != nil {
+		setupLog.Error(err, "failed to initialize nic store")
+		return err
+	}
+
+	nicEvents, err := event.NewListWatchSource[*api.NetworkInterface](
+		nicStore.List,
+		nicStore.Watch,
+		event.ListWatchSourceOptions{},
+	)
+	if err != nil {
+		setupLog.Error(err, "failed to initialize nic events")
+		return err
+	}
+
 	eventRecorder := recorder.NewEventStore(log, recorder.EventStoreOptions{})
 
 	virtualMachineManager := vmm.NewManager(hostPaths, vmm.ManagerOptions{
@@ -219,6 +239,7 @@ func Run(ctx context.Context, opts Options) error {
 		eventRecorder,
 		virtualMachineManager,
 		pluginManager,
+		nicStore,
 		nicPlugin,
 		controllers.MachineReconcilerOptions{
 			ImageCache: imgCache,
@@ -228,6 +249,21 @@ func Run(ctx context.Context, opts Options) error {
 	)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize machine controller")
+		return err
+	}
+
+	nicReconciler, err := controllers.NewNetworkInterfaceReconciler(
+		log.WithName("nic-reconciler"),
+		eventRecorder,
+		nicStore,
+		nicEvents,
+		nicPlugin,
+		controllers.NetworkInterfaceReconcilerOptions{
+			Paths: hostPaths,
+		},
+	)
+	if err != nil {
+		setupLog.Error(err, "failed to initialize nic controller")
 		return err
 	}
 
@@ -261,6 +297,24 @@ func Run(ctx context.Context, opts Options) error {
 		setupLog.Info("Starting machine events")
 		if err := machineEvents.Start(ctx); err != nil {
 			setupLog.Error(err, "failed to start machine events")
+			return err
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		setupLog.Info("Starting nic reconciler")
+		if err := nicReconciler.Start(ctx); err != nil {
+			setupLog.Error(err, "failed to start nic reconciler")
+			return err
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		setupLog.Info("Starting nic events")
+		if err := nicEvents.Start(ctx); err != nil {
+			setupLog.Error(err, "failed to start nic events")
 			return err
 		}
 		return nil

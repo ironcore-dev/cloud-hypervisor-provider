@@ -16,6 +16,7 @@ const (
 	DefaultMachinesDir                 = "machines"
 	DefaultStoreDir                    = "store"
 	DefaultMachineStoreDir             = "machines"
+	DefaultNICStoreDir                 = "nics"
 	DefaultMachineVolumesDir           = "volumes"
 	DefaultMachineIgnitionsDir         = "ignitions"
 	DefaultMachineIgnitionFile         = "data.ign"
@@ -31,6 +32,7 @@ type Paths interface {
 
 	MachinesDir() string
 	MachineStoreDir() string
+	NICStoreDir() string
 	ImagesDir() string
 	PluginsDir() string
 
@@ -71,6 +73,10 @@ func (p *paths) MachinesDir() string {
 
 func (p *paths) MachineStoreDir() string {
 	return filepath.Join(p.StoreDir(), DefaultMachineStoreDir)
+}
+
+func (p *paths) NICStoreDir() string {
+	return filepath.Join(p.StoreDir(), DefaultNICStoreDir)
 }
 
 func (p *paths) ImagesDir() string {

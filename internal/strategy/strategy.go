@@ -14,3 +14,11 @@ type machineStrategy struct{}
 func (machineStrategy) PrepareForCreate(obj *api.Machine) {
 	obj.Status = api.MachineStatus{State: api.MachineStatePending}
 }
+
+var NetworkInterfaceStrategy = nicStrategy{}
+
+type nicStrategy struct{}
+
+func (nicStrategy) PrepareForCreate(obj *api.NetworkInterface) {
+	obj.Status = api.NetworkInterfaceStatus{State: api.NetworkInterfaceStatePending}
+}

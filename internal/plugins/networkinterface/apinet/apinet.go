@@ -161,7 +161,7 @@ func (p *Plugin) Apply(
 				apinetNic.UID,
 			),
 			Path:  fmt.Sprintf("/sys/bus/pci/devices/%s", ptr.Deref(pciAddress, "")),
-			State: "",
+			State: api.NetworkInterfaceStateAttached,
 		}, nil
 	}
 
@@ -194,7 +194,7 @@ func (p *Plugin) Apply(
 			apinetNic.UID,
 		),
 		Path:  fmt.Sprintf("/sys/bus/pci/devices/%s", ptr.Deref(pciAddress, "")),
-		State: "",
+		State: api.NetworkInterfaceStateAttached,
 	}, nil
 }
 
@@ -209,7 +209,7 @@ func getPCIAddress(apinetNic *apinetv1alpha1.NetworkInterface) (*string, error) 
 			return nil, fmt.Errorf("not implemented")
 		case apinetNic.Status.PCIAddress != nil && apinetNic.Status.TAPDevice == nil:
 			pciDevice := apinetNic.Status.PCIAddress
-			return ptr.To(fmt.Sprintf("%s:%s:%s:%s",
+			return ptr.To(fmt.Sprintf("%s:%s:%s.%s",
 				pciDevice.Domain,
 				pciDevice.Bus,
 				pciDevice.Slot,

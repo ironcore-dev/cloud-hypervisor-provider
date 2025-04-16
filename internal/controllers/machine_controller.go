@@ -49,6 +49,7 @@ func NewMachineReconciler(
 	eventRecorder recorder.EventRecorder,
 	vmm *vmm.Manager,
 	volumePluginManager *volume.PluginManager,
+	nics store.Store[*api.NetworkInterface],
 	nicPlugin networkinterface.Plugin,
 	opts MachineReconcilerOptions,
 ) (*MachineReconciler, error) {
@@ -74,6 +75,7 @@ func NewMachineReconciler(
 		vmm:                    vmm,
 		VolumePluginManager:    volumePluginManager,
 		networkInterfacePlugin: nicPlugin,
+		nics:                   nics,
 	}, nil
 }
 
@@ -122,14 +124,14 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 		},
 	})
 
-	imgEventReg, err := r.machineEvents.AddHandler(event.HandlerFunc[*api.Machine](func(evt event.Event[*api.Machine]) {
+	eventHandlerRegistration, err := r.machineEvents.AddHandler(event.HandlerFunc[*api.Machine](func(evt event.Event[*api.Machine]) {
 		r.queue.Add(evt.Object.ID)
 	}))
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if err = r.machineEvents.RemoveHandler(imgEventReg); err != nil {
+		if err = r.machineEvents.RemoveHandler(eventHandlerRegistration); err != nil {
 			log.Error(err, "failed to remove machine event handler")
 		}
 	}()
@@ -195,6 +197,7 @@ func (r *MachineReconciler) getOrCreateNetworkInterface(
 			ID: nicID,
 		},
 		Spec: api.NetworkInterfaceSpec{
+			Name:       machineNic.Name,
 			NetworkId:  machineNic.NetworkId,
 			Ips:        machineNic.Ips,
 			Attributes: machineNic.Attributes,
@@ -208,20 +211,33 @@ func (r *MachineReconciler) getOrCreateNetworkInterface(
 }
 
 func getNicID(machineID, nicName string) string {
-	return fmt.Sprintf("%s/%s/%s", "NIC", machineID, nicName)
+	return fmt.Sprintf("%s--%s--%s", "NIC", machineID, nicName)
 }
 
 func getNicName(id string) *string {
-	parts := strings.Split(id, "/")
+	parts := strings.Split(id, "--")
 	if len(parts) != 3 {
 		return nil
 	}
 
-	if parts[0] == "NIC" {
+	if parts[0] != "NIC" {
 		return nil
 	}
 
 	return &parts[2]
+}
+
+func getMachineNameFromNicID(id string) *string {
+	parts := strings.Split(id, "--")
+	if len(parts) != 3 {
+		return nil
+	}
+
+	if parts[0] != "NIC" {
+		return nil
+	}
+
+	return &parts[1]
 }
 
 func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) error {
@@ -272,6 +288,7 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		nicID := getNicID(machine.ID, networkInterface.Name)
 
 		if networkInterface.DeletedAt != nil {
+			//TODO handle deletion flow
 			log.V(2).Info("NetworkInterface should be deleted: skip creation", "nicID", nicID)
 			continue
 		}

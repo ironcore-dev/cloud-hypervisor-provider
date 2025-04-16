@@ -257,19 +257,14 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[s
 	}
 
 	var dev []client.DeviceConfig
-	for _, nic := range machine.Spec.NetworkInterfaces {
-		attachedNic, found := nics[nic.Name]
-		if !found || attachedNic == nil {
-			return fmt.Errorf("nic %s not found", nic.Name)
-		}
-
-		if attachedNic.Status.State != api.NetworkInterfaceStateAttached {
-			return fmt.Errorf("nic %s is not attached", nic.Name)
+	for _, nic := range nics {
+		if nic.Status.State != api.NetworkInterfaceStateAttached {
+			return fmt.Errorf("nic %s is not attached", nic.ID)
 		}
 
 		dev = append(dev, client.DeviceConfig{
-			Id:   ptr.To(nic.Name),
-			Path: attachedNic.Status.Path,
+			Id:   ptr.To(nic.ID),
+			Path: nic.Status.Path,
 		})
 	}
 
@@ -415,12 +410,12 @@ func (m *Manager) PowerOff(ctx context.Context, machineId string) error {
 }
 
 func getNicName(id string) (string, error) {
-	parts := strings.Split(id, "/")
+	parts := strings.Split(id, "--")
 	if len(parts) != 3 {
 		return "", errors.New("invalid nic name")
 	}
 
-	if parts[0] == "NIC" {
+	if parts[0] != "NIC" {
 		return "", errors.New("invalid nic name")
 	}
 
