@@ -258,6 +258,10 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[s
 
 	var dev []client.DeviceConfig
 	for _, nic := range nics {
+		if nic == nil {
+			continue
+		}
+
 		if nic.Status.State != api.NetworkInterfaceStateAttached {
 			return fmt.Errorf("nic %s is not attached", nic.ID)
 		}

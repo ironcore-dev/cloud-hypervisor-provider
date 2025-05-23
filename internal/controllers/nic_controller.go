@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ironcore-dev/provider-utils/eventutils/event"
+	"github.com/ironcore-dev/provider-utils/storeutils/utils"
 	"k8s.io/utils/ptr"
 	"slices"
 	"sync"
@@ -136,6 +137,15 @@ func (r *NetworkInterfaceReconciler) reconcileNetworkInterface(ctx context.Conte
 	}
 
 	if nic.DeletedAt != nil {
+		if len(nic.Finalizers) > 1 {
+			log.V(1).Info("Finalizers from dependencies still present")
+			return nil
+		}
+
+		if err := r.deleteNic(ctx, log, nic); err != nil {
+			return fmt.Errorf("failed to delete nic: %w", err)
+		}
+		log.V(1).Info("Successfully deleted nic")
 		return nil
 	}
 
@@ -164,6 +174,31 @@ func (r *NetworkInterfaceReconciler) reconcileNetworkInterface(ctx context.Conte
 	if _, err := r.nics.Update(ctx, nic); err != nil {
 		return fmt.Errorf("failed to update network interface: %w", err)
 	}
+
+	return nil
+}
+
+func (r *NetworkInterfaceReconciler) deleteNic(ctx context.Context, log logr.Logger, nic *api.NetworkInterface) error {
+	if !slices.Contains(nic.Finalizers, NetworkInterfaceFinalizer) {
+		log.V(1).Info("image has no finalizer: done")
+		return nil
+	}
+
+	machineName := getMachineNameFromNicID(nic.ID)
+	if machineName == nil {
+		return fmt.Errorf("failed to get machine name: invalid nic id")
+	}
+
+	if err := r.networkInterfacePlugin.Delete(ctx, nic.Spec.Name, ptr.Deref(machineName, "")); err != nil {
+		return fmt.Errorf("failed to apply network interface: %w", err)
+	}
+	log.V(2).Info("Rbd image deleted")
+
+	nic.Finalizers = utils.DeleteSliceElement(nic.Finalizers, NetworkInterfaceFinalizer)
+	if _, err := r.nics.Update(ctx, nic); store.IgnoreErrNotFound(err) != nil {
+		return fmt.Errorf("failed to update image metadata: %w", err)
+	}
+	log.V(2).Info("Removed Finalizers")
 
 	return nil
 }

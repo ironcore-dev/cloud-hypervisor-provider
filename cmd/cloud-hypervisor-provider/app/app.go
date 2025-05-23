@@ -7,7 +7,6 @@ import (
 	"context"
 	goflag "flag"
 	"fmt"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/options"
 	"net"
 	"os"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/controllers"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/oci"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/options"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/ceph"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
@@ -158,7 +158,7 @@ func Run(ctx context.Context, opts Options) error {
 	pluginManager := volume.NewPluginManager()
 	if err := pluginManager.InitPlugins(hostPaths, []volume.Plugin{
 		ceph.NewPlugin(ceph.DefaultProvider(
-			log,
+			log.WithName("ceph-volume-plugin"),
 			hostPaths,
 			//TODO flag
 			"/usr/bin/qemu-storage-daemon",
@@ -240,6 +240,7 @@ func Run(ctx context.Context, opts Options) error {
 		virtualMachineManager,
 		pluginManager,
 		nicStore,
+		nicEvents,
 		nicPlugin,
 		controllers.MachineReconcilerOptions{
 			ImageCache: imgCache,
