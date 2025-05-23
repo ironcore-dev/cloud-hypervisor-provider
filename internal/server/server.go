@@ -22,6 +22,8 @@ var _ iri.MachineRuntimeServer = (*Server)(nil)
 type Server struct {
 	idGen idgen.IDGen
 
+	supportedMachineClasses []MachineClass
+
 	machineStore store.Store[*api.Machine]
 	eventStore   recorder.EventStore
 }
@@ -30,6 +32,8 @@ type Options struct {
 	IDGen idgen.IDGen
 
 	EventStore recorder.EventStore
+
+	SupportedMachineClasses []MachineClass
 }
 
 type nilEventStore struct{}
@@ -51,9 +55,10 @@ func New(store store.Store[*api.Machine], opts Options) (*Server, error) {
 	setOptionsDefaults(&opts)
 
 	return &Server{
-		idGen:        opts.IDGen,
-		machineStore: store,
-		eventStore:   opts.EventStore,
+		idGen:                   opts.IDGen,
+		machineStore:            store,
+		eventStore:              opts.EventStore,
+		supportedMachineClasses: opts.SupportedMachineClasses,
 	}, nil
 }
 

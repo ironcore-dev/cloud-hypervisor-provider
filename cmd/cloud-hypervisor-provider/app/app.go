@@ -53,6 +53,8 @@ type Options struct {
 	RootDir   string
 	DetachVms bool
 
+	MachineClasses MachineClassOptions
+
 	CloudHypervisorBinPath      string
 	CloudHypervisorFirmwarePath string
 
@@ -88,6 +90,12 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 		"detach-vms",
 		true,
 		"Detach VMs processes from manager process.",
+	)
+
+	fs.Var(
+		&o.MachineClasses,
+		"machine-class",
+		"Supported machine classes (format: name,cpu,memory)",
 	)
 
 	o.NicPlugin = options.NewDefaultOptions()
@@ -269,7 +277,8 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	srv, err := server.New(machineStore, server.Options{
-		EventStore: eventRecorder,
+		EventStore:              eventRecorder,
+		SupportedMachineClasses: opts.MachineClasses,
 	})
 	if err != nil {
 		return fmt.Errorf("error creating server: %w", err)
