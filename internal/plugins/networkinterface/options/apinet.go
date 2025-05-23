@@ -5,9 +5,9 @@ package options
 
 import (
 	"fmt"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/apinet"
 
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/apinet"
 	apinetv1alpha1 "github.com/ironcore-dev/ironcore-net/api/core/v1alpha1"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"

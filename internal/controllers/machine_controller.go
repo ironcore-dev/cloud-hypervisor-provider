@@ -7,6 +7,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
+	"sync"
+
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
@@ -26,9 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
-	"slices"
-	"strings"
-	"sync"
 )
 
 const (
@@ -127,9 +128,10 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 		},
 	})
 
-	machineEventHandlerRegistration, err := r.machineEvents.AddHandler(event.HandlerFunc[*api.Machine](func(evt event.Event[*api.Machine]) {
-		r.queue.Add(evt.Object.ID)
-	}))
+	machineEventHandlerRegistration, err := r.machineEvents.AddHandler(
+		event.HandlerFunc[*api.Machine](func(evt event.Event[*api.Machine]) {
+			r.queue.Add(evt.Object.ID)
+		}))
 	if err != nil {
 		return err
 	}
@@ -139,12 +141,13 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 		}
 	}()
 
-	nicEventHandlerRegistration, err := r.nicEvents.AddHandler(event.HandlerFunc[*api.NetworkInterface](func(evt event.Event[*api.NetworkInterface]) {
-		machineID := getMachineNameFromNicID(evt.Object.ID)
-		if machineID != nil {
-			r.queue.Add(ptr.Deref(machineID, ""))
-		}
-	}))
+	nicEventHandlerRegistration, err := r.nicEvents.AddHandler(
+		event.HandlerFunc[*api.NetworkInterface](func(evt event.Event[*api.NetworkInterface]) {
+			machineID := getMachineNameFromNicID(evt.Object.ID)
+			if machineID != nil {
+				r.queue.Add(ptr.Deref(machineID, ""))
+			}
+		}))
 	if err != nil {
 		return err
 	}
@@ -193,41 +196,6 @@ func (r *MachineReconciler) processNextWorkItem(ctx context.Context, log logr.Lo
 	return true
 }
 
-func (r *MachineReconciler) getOrCreateNetworkInterface(
-	ctx context.Context,
-	log logr.Logger,
-	nicID string,
-	machineNic *api.MachineNetworkInterfaceSpec,
-) (*api.NetworkInterface, error) {
-	log.V(2).Info("Getting network interface", "nicID", nicID)
-	nic, err := r.nics.Get(ctx, nicID)
-	if err == nil {
-		return nic, nil
-	}
-
-	if !errors.Is(err, store.ErrNotFound) {
-		return nil, err
-	}
-
-	log.V(2).Info("Network interface not present, create it", "nicID", nicID)
-	nic, err = r.nics.Create(ctx, &api.NetworkInterface{
-		Metadata: apiutils.Metadata{
-			ID: nicID,
-		},
-		Spec: api.NetworkInterfaceSpec{
-			Name:       machineNic.Name,
-			NetworkId:  machineNic.NetworkId,
-			Ips:        machineNic.Ips,
-			Attributes: machineNic.Attributes,
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return nic, nil
-}
-
 func getNicID(machineID, nicName string) string {
 	return fmt.Sprintf("%s--%s--%s", "NIC", machineID, nicName)
 }
@@ -256,16 +224,6 @@ func getMachineNameFromNicID(id string) *string {
 	}
 
 	return &parts[1]
-}
-
-func removeNicsFromNicList(nics []api.MachineNetworkInterfaceStatus, nicNames []string) []api.MachineNetworkInterfaceStatus {
-	var updatedNics []api.MachineNetworkInterfaceStatus
-	for _, nic := range nics {
-		if !slices.Contains(nicNames, nic.Name) {
-			updatedNics = append(updatedNics, nic)
-		}
-	}
-	return updatedNics
 }
 
 func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) error {

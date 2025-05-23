@@ -7,9 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ironcore-dev/provider-utils/eventutils/event"
-	"github.com/ironcore-dev/provider-utils/storeutils/utils"
-	"k8s.io/utils/ptr"
 	"slices"
 	"sync"
 
@@ -17,9 +14,12 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
+	"github.com/ironcore-dev/provider-utils/eventutils/event"
 	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
 	"github.com/ironcore-dev/provider-utils/storeutils/store"
+	"github.com/ironcore-dev/provider-utils/storeutils/utils"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -72,9 +72,10 @@ func (r *NetworkInterfaceReconciler) Start(ctx context.Context) error {
 	// TODO make configurable
 	workerSize := 15
 
-	eventHandlerRegistration, err := r.nicEvents.AddHandler(event.HandlerFunc[*api.NetworkInterface](func(evt event.Event[*api.NetworkInterface]) {
-		r.queue.Add(evt.Object.ID)
-	}))
+	eventHandlerRegistration, err := r.nicEvents.AddHandler(
+		event.HandlerFunc[*api.NetworkInterface](func(evt event.Event[*api.NetworkInterface]) {
+			r.queue.Add(evt.Object.ID)
+		}))
 	if err != nil {
 		return err
 	}

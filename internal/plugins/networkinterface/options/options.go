@@ -97,7 +97,12 @@ func NewOptions(registry *TypeOptionsRegistry) *Options {
 }
 
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&o.PluginName, "network-interface-plugin-name", o.registry.DefaultPluginName(), fmt.Sprintf("Name of the network interface plugin to use. Available: %v", o.registry.PluginNames()))
+	fs.StringVar(
+		&o.PluginName, "network-interface-plugin-name",
+		o.registry.DefaultPluginName(),
+		fmt.Sprintf("Name of the network interface plugin to use. Available: %v",
+			o.registry.PluginNames()),
+	)
 	o.registry.ForeachPluginTypeOpts(func(pluginName string, pluginOpts TypeOptions) bool {
 		pluginOpts.AddFlags(fs)
 		return true

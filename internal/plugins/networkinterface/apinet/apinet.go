@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"os"
 	"path/filepath"
 	"time"
@@ -25,6 +24,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -72,7 +72,10 @@ func (p *Plugin) apiNetNetworkInterfaceConfigFile(machineID string, networkInter
 	return filepath.Join(p.host.MachineNetworkInterfaceDir(machineID, networkInterfaceName), defaultAPINetConfigFile)
 }
 
-func (p *Plugin) writeAPINetNetworkInterfaceConfig(machineID string, networkInterfaceName string, cfg *apiNetNetworkInterfaceConfig) error {
+func (p *Plugin) writeAPINetNetworkInterfaceConfig(
+	machineID string, networkInterfaceName string,
+	cfg *apiNetNetworkInterfaceConfig,
+) error {
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		return err
@@ -81,7 +84,10 @@ func (p *Plugin) writeAPINetNetworkInterfaceConfig(machineID string, networkInte
 	return os.WriteFile(p.apiNetNetworkInterfaceConfigFile(machineID, networkInterfaceName), data, filePerm)
 }
 
-func (p *Plugin) readAPINetNetworkInterfaceConfig(machineID string, networkInterfaceName string) (*apiNetNetworkInterfaceConfig, error) {
+func (p *Plugin) readAPINetNetworkInterfaceConfig(
+	machineID string,
+	networkInterfaceName string,
+) (*apiNetNetworkInterfaceConfig, error) {
 	data, err := os.ReadFile(p.apiNetNetworkInterfaceConfigFile(machineID, networkInterfaceName))
 	if err != nil {
 		return nil, err
@@ -167,17 +173,22 @@ func (p *Plugin) Apply(
 
 	log.V(1).Info("Waiting for apinet network interface to become ready")
 	apinetNicKey := client.ObjectKeyFromObject(apinetNic)
-	if err := wait.PollUntilContextTimeout(ctx, 50*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (done bool, err error) {
-		if err := p.apinetClient.Get(ctx, apinetNicKey, apinetNic); err != nil {
-			return false, fmt.Errorf("error getting apinet nic %s: %w", apinetNicKey, err)
-		}
+	if err := wait.PollUntilContextTimeout(
+		ctx,
+		50*time.Millisecond,
+		5*time.Second,
+		true,
+		func(ctx context.Context) (done bool, err error) {
+			if err := p.apinetClient.Get(ctx, apinetNicKey, apinetNic); err != nil {
+				return false, fmt.Errorf("error getting apinet nic %s: %w", apinetNicKey, err)
+			}
 
-		pciAddress, err = getPCIAddress(apinetNic)
-		if err != nil {
-			return false, fmt.Errorf("error getting host device: %w", err)
-		}
-		return pciAddress != nil, nil
-	}); err != nil {
+			pciAddress, err = getPCIAddress(apinetNic)
+			if err != nil {
+				return false, fmt.Errorf("error getting host device: %w", err)
+			}
+			return pciAddress != nil, nil
+		}); err != nil {
 		return nil, fmt.Errorf("error waiting for nic to become ready: %w", err)
 	}
 
@@ -263,15 +274,19 @@ func (p *Plugin) Delete(ctx context.Context, computeNicName string, machineID st
 	}
 
 	log.V(1).Info("Waiting until apinet network interface is gone")
-	if err := wait.PollUntilContextTimeout(ctx, 50*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (done bool, err error) {
-		if err := p.apinetClient.Get(ctx, apinetNicKey, &apinetv1alpha1.NetworkInterface{}); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return false, fmt.Errorf("error getting apinet network interface %s: %w", apinetNicKey, err)
+	if err := wait.PollUntilContextTimeout(
+		ctx, 50*time.Millisecond,
+		10*time.Second,
+		true,
+		func(ctx context.Context) (done bool, err error) {
+			if err := p.apinetClient.Get(ctx, apinetNicKey, &apinetv1alpha1.NetworkInterface{}); err != nil {
+				if !apierrors.IsNotFound(err) {
+					return false, fmt.Errorf("error getting apinet network interface %s: %w", apinetNicKey, err)
+				}
+				return true, nil
 			}
-			return true, nil
-		}
-		return false, nil
-	}); err != nil {
+			return false, nil
+		}); err != nil {
 		return fmt.Errorf("error waiting for apinet network interface %s to be gone: %w", apinetNicKey, err)
 	}
 
