@@ -1,5 +1,6 @@
 # Image URL to use all building/pushing image targets
 CLOUD_HYPERVISOR_PROVIDER_IMG ?= cloud-hypervisor-provider:latest
+CLOUD_HYPERVISOR_PROVIDER_PREPARE_HOST_IMG ?= cloud-hypervisor-provider-prepare-host:latest
 
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
@@ -116,12 +117,17 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: \
-	docker-build-cloud-hypervisor-provider
+	docker-build-cloud-hypervisor-provider \
+	docker-build-cloud-hypervisor-provider-prepare-host
 
 
 .PHONY: docker-build-cloud-hypervisor-provider
 docker-build-cloud-hypervisor-provider: ## Build cloud-hypervisor-provider image.
 	docker build --target cloud-hypervisor-provider -t ${CLOUD_HYPERVISOR_PROVIDER_IMG} .
+
+.PHONY: docker-build-cloud-hypervisor-provider-prepare-host
+docker-build-cloud-hypervisor-provider-prepare-host: ## Build cloud-hypervisor-provider image.
+	docker build --target prepare-host -t ${CLOUD_HYPERVISOR_PROVIDER_PREPARE_HOST_IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.

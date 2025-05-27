@@ -66,56 +66,14 @@ spec:
           securityContext:
             privileged: true
         - name: prepare-host
-          image: ubuntu
+          image: cloud-hypervisor-prepare-host:latest
           securityContext:
             privileged: true
-          command: [ '/bin/bash', '-c' ]
-          env:
-            - name: DEPENDENCIES
-              value: "ceph-common qemu-utils"
-            - name: CH_FILENAME
-              value: cloud-hypervisor-static
-            - name: FW_FILENAME
-              value: hypervisor-fw
-            - name: CH_VERSION
-              value: v40.0
-            - name: FW_VERSION
-              value: 0.4.2
-          args:
-            - |
-#              apt-get update
-#              apt-get install -y curl
-#
-#              IFS=' ' read -r -a dependencies <<< "$DEPENDENCIES"
-#              for dependency in "${dependencies[@]}"; do
-#                if ! dpkg --root=/host-root --get-selections | grep -E "^${dependency}\s+install$" -q; then
-#                  echo "Error: $dependency is not installed."
-#                  exit 1
-#                fi
-#              done
-#
-#              # Check if the cloud-hypervisor file exists in /opt
-#              if [ ! -f "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)" ]; then
-#                mkdir -p "/opt/cloud-hypervisor/$(CH_VERSION)"
-#                curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/$(CH_VERSION)/$(CH_FILENAME)" -o "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)"
-#                chmod a+x "/opt/cloud-hypervisor/$(CH_VERSION)/$(CH_FILENAME)"
-#              else
-#                echo "Cloud Hypervisor file already exists, skipping download."
-#              fi
-#
-#              # Check if the rust-hypervisor-firmware file exists in /opt
-#              if [ ! -f "/opt/rust-hypervisor-firmware/$(FW_VERSION)/$(FW_FILENAME)" ]; then
-#                mkdir -p "/opt/rust-hypervisor-firmware/$(FW_VERSION)"
-#                curl -L "https://github.com/cloud-hypervisor/rust-hypervisor-firmware/releases/download/$(FW_VERSION)/$(FW_FILENAME)" -o "/opt/rust-hypervisor-firmware/$(FW_VERSION)/$(FW_FILENAME)"
-#              else
-#                echo "Rust Hypervisor Firmware file already exists, skipping download."
-#              fi
+          command:
+            - /prepare-host
           volumeMounts:
-            - name: etc
-              mountPath: /etc
-            - name: host-dpkg
-              mountPath: /host-root/var/lib/dpkg
-              readOnly: true
+            - mountPath: /var/lib/cloud-hypervisor-provider
+              name: cloud-hypervisor-provider
       containers:
         - command:
             - /machinepoollet
