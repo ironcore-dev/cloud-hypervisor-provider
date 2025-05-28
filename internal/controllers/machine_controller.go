@@ -271,6 +271,8 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 
 	return nil
 }
+
+// nolint: gocyclo
 func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) error {
 	log := logr.FromContextOrDiscard(ctx)
 

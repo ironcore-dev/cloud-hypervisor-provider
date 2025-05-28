@@ -45,6 +45,8 @@ RUN if [ "$TARGETARCH" = "$BUILDARCH" ]; then \
 FROM debian:bullseye-slim AS cloud-hypervisor-provider
 WORKDIR /
 
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 # Copy the binaries from the builder
 COPY --from=builder /workspace/bin/cloud-hypervisor-provider .
 COPY --from=builder /workspace/bin/irictl-machine .
