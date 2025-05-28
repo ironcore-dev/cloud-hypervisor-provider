@@ -67,3 +67,5 @@ FROM gcr.io/distroless/static:nonroot AS prepare-host
 WORKDIR /
 COPY --from=prepare-host-builder /workspace/bin/prepare-host .
 USER 65532:65532
+
+ENTRYPOINT ["/prepare-host"]

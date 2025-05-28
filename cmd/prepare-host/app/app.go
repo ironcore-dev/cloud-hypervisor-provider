@@ -22,10 +22,14 @@ import (
 const (
 	ChName       = "cloud-hypervisor"
 	FirmwareName = "firmware"
+	Uid          = 65532 // Desired user ID
+	Gid          = 65532 // Desired group ID
 )
 
 type Options struct {
 	Download bool
+
+	ProviderBasePath string
 
 	CloudHypervisorBinPath   string
 	CloudHypervisorBinSubDir string
@@ -42,6 +46,13 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 		"download",
 		false,
 		"Download binaries otherwise it will error if files are not present.",
+	)
+
+	fs.StringVar(
+		&o.ProviderBasePath,
+		"provider-base-path",
+		"/var/lib/cloud-hypervisor-provider",
+		"Path to the provider base directory.",
 	)
 
 	fs.StringVar(
@@ -114,6 +125,24 @@ func Run(ctx context.Context, opts Options) error {
 	log := ctrl.LoggerFrom(ctx).WithName("prepare-host")
 
 	log.Info("starting host preparation")
+
+	log.V(1).Info("checking if base path exists", "path", opts.ProviderBasePath)
+	info, err := os.Stat(opts.ProviderBasePath)
+	if os.IsNotExist(err) {
+		log.V(1).Info("base path does not exist", "path", opts.ProviderBasePath)
+		if err := os.MkdirAll(opts.ProviderBasePath, 0755); err != nil {
+			return fmt.Errorf("failed to create provider base directory: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed to stat %s: %w", opts.ProviderBasePath, err)
+	} else if !info.IsDir() {
+		return fmt.Errorf("path exists but is not a directory: %s", opts.ProviderBasePath)
+	}
+
+	log.V(1).Info("setting owner", "path", opts.ProviderBasePath, "uid", Uid, "gid", Gid)
+	if err := os.Chown(opts.ProviderBasePath, Uid, Gid); err != nil {
+		return fmt.Errorf("failed to set owner: %w", err)
+	}
 
 	chPresent := isFilePresent(log, path.Join(opts.CloudHypervisorBinPath, opts.CloudHypervisorBinSubDir, ChName))
 	if !opts.Download && !chPresent {

@@ -57,14 +57,6 @@ spec:
 #        seccompProfile:
 #          type: RuntimeDefault
       initContainers:
-        - name: init-permissions
-          image: busybox
-          command: [ "sh", "-c", "chown -R 65532:65532 /var/lib/cloud-hypervisor-provider" ]
-          volumeMounts:
-            - mountPath: /var/lib/cloud-hypervisor-provider
-              name: cloud-hypervisor-provider
-          securityContext:
-            privileged: true
         - name: prepare-host
           image: cloud-hypervisor-prepare-host:latest
           securityContext:
@@ -103,7 +95,7 @@ spec:
           resources:
             limits:
               cpu: 100m
-              memory: 30Mi
+              memory: 50Mi
             requests:
               cpu: 100m
               memory: 20Mi
@@ -136,7 +128,7 @@ spec:
           resources:
             limits:
               cpu: 100m
-              memory: 30Mi
+              memory: 50Mi
             requests:
               cpu: 100m
               memory: 20Mi
