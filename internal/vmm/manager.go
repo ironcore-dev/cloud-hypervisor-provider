@@ -154,6 +154,32 @@ func (m *Manager) InitVMM(ctx context.Context, machineId string) error {
 	return nil
 }
 
+func (m *Manager) KillVMM(ctx context.Context, machineId string) error {
+	m.idMu.Lock(machineId)
+	defer m.idMu.Unlock(machineId)
+
+	log := m.log.WithValues("machineID", machineId)
+
+	apiClient, found := m.vms[machineId]
+	if !found {
+		return ErrNotFound
+	}
+
+	log.V(2).Info("Getting vm")
+	resp, err := apiClient.ShutdownVMMWithResponse(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get vm: %w", err)
+	}
+
+	if err := validateStatus(resp.StatusCode()); err != nil {
+		return err
+	}
+
+	delete(m.vms, machineId)
+
+	return nil
+}
+
 func (m *Manager) Ping(ctx context.Context, machineId string) error {
 	m.idMu.Lock(machineId)
 	defer m.idMu.Unlock(machineId)

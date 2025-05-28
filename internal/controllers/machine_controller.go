@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -226,6 +227,50 @@ func getMachineNameFromNicID(id string) *string {
 	return &parts[1]
 }
 
+func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, machine *api.Machine) error {
+
+	if err := r.vmm.PowerOff(ctx, machine.ID); !errors.Is(err, vmm.ErrNotFound) {
+		return fmt.Errorf("failed to power off machine: %w", err)
+	}
+
+	if err := r.vmm.KillVMM(ctx, machine.ID); !errors.Is(err, vmm.ErrNotFound) {
+		return fmt.Errorf("failed to kill VMM: %w", err)
+	}
+
+	allNicsDeleted := true
+	for _, machineNic := range machine.Spec.NetworkInterfaces {
+		nicName := getNicID(machine.ID, machineNic.Name)
+		if nic, err := r.nics.Get(ctx, nicName); !errors.Is(err, store.ErrNotFound) {
+			allNicsDeleted = false
+			if err := r.removeFinalizerFromNIC(ctx, nic); err != nil {
+				return fmt.Errorf("failed to remove finalizer from NIC: %w", err)
+			}
+			if err := r.nics.Delete(ctx, getNicID(machine.ID, machineNic.Name)); store.IgnoreErrNotFound(err) != nil {
+				return fmt.Errorf("failed to delete nic %s: %w", machineNic.Name, err)
+			}
+		}
+	}
+	if !allNicsDeleted {
+		log.V(1).Info("Wait until all nics are deleted")
+		return nil
+	}
+
+	//TODO volume
+
+	if err := os.RemoveAll(r.paths.MachineDir(machine.ID)); err != nil {
+		return fmt.Errorf("failed to remove machine directory: %w", err)
+	}
+	log.V(1).Info("Removed machine directory")
+
+	machine.Finalizers = utils.DeleteSliceElement(machine.Finalizers, MachineFinalizer)
+	if _, err := r.machines.Update(ctx, machine); store.IgnoreErrNotFound(err) != nil {
+		return fmt.Errorf("failed to update machine metadata: %w", err)
+	}
+
+	log.V(1).Info("Removed Finalizer. Deletion completed")
+
+	return nil
+}
 func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) error {
 	log := logr.FromContextOrDiscard(ctx)
 
@@ -240,6 +285,10 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 	}
 
 	if machine.DeletedAt != nil {
+		if err := r.deleteMachine(ctx, log, machine); err != nil {
+			return fmt.Errorf("failed to delete machine: %w", err)
+		}
+		log.V(1).Info("Successfully deleted machine")
 		return nil
 	}
 
