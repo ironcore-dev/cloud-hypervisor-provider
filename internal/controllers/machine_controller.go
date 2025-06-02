@@ -153,8 +153,8 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 		return err
 	}
 	defer func() {
-		if err = r.machineEvents.RemoveHandler(nicEventHandlerRegistration); err != nil {
-			log.Error(err, "failed to remove machine event handler")
+		if err = r.nicEvents.RemoveHandler(nicEventHandlerRegistration); err != nil {
+			log.Error(err, "failed to remove nic event handler")
 		}
 	}()
 
