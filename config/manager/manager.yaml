@@ -114,6 +114,8 @@ spec:
           name: provider
           securityContext:
             privileged: true
+            runAsGroup: 65532
+            runAsUser: 65532
 #          livenessProbe:
 #            httpGet:
 #              path: /healthz
@@ -138,6 +140,10 @@ spec:
               mountPath: /var/run
             - mountPath: /var/lib/cloud-hypervisor-provider
               name: cloud-hypervisor-provider
+            - name: kvm
+              mountPath: /dev/kvm
+            - name: vhost
+              mountPath: /dev/vhost-net
       volumes:
         - name: var-run
           emptyDir: { }
@@ -153,5 +159,18 @@ spec:
           hostPath:
             path: /var/lib/cloud-hypervisor-provider
             type: DirectoryOrCreate
+        - name: kvm
+          hostPath:
+            path: /dev/kvm
+            type: CharDevice
+        - name: vhost
+          hostPath:
+            path: /dev/vhost-net
+            type: CharDevice
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
+      securityContext:
+        runAsGroup: 65532
+        runAsUser: 65532
+        supplementalGroups:
+          - 108
