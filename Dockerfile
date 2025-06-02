@@ -65,7 +65,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     ./cmd/prepare-host
 
 
-FROM alpine:3.21 AS prepare-host
+FROM alpine:3.22 AS prepare-host
 RUN apk add --no-cache ca-certificates
 
 WORKDIR /
