@@ -24,7 +24,7 @@ var _ iri.MachineRuntimeServer = (*Server)(nil)
 type Server struct {
 	idGen idgen.IDGen
 
-	supportedMachineClasses mcr.MachineClassRegistry
+	machineClassRegistry mcr.MachineClassRegistry
 
 	machineStore store.Store[*api.Machine]
 	eventStore   recorder.EventStore
@@ -35,7 +35,7 @@ type Options struct {
 
 	EventStore recorder.EventStore
 
-	SupportedMachineClasses mcr.MachineClassRegistry
+	MachineClassRegistry mcr.MachineClassRegistry
 }
 
 type nilEventStore struct{}
@@ -56,15 +56,15 @@ func setOptionsDefaults(o *Options) {
 func New(store store.Store[*api.Machine], opts Options) (*Server, error) {
 	setOptionsDefaults(&opts)
 
-	if opts.SupportedMachineClasses == nil {
-		return nil, fmt.Errorf("SupportedMachineClasses option is required")
+	if opts.MachineClassRegistry == nil {
+		return nil, fmt.Errorf("MachineClassRegistry option is required")
 	}
 
 	return &Server{
-		idGen:                   opts.IDGen,
-		machineStore:            store,
-		eventStore:              opts.EventStore,
-		supportedMachineClasses: opts.SupportedMachineClasses,
+		idGen:                opts.IDGen,
+		machineStore:         store,
+		eventStore:           opts.EventStore,
+		machineClassRegistry: opts.MachineClassRegistry,
 	}, nil
 }
 

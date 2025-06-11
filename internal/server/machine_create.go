@@ -29,7 +29,7 @@ func (s *Server) createMachineFromIRIMachine(
 		return nil, fmt.Errorf("iri machine metadata is nil")
 	}
 
-	class, found := s.supportedMachineClasses.Get(iriMachine.Spec.Class)
+	class, found := s.machineClassRegistry.Get(iriMachine.Spec.Class)
 	if found {
 		return nil, fmt.Errorf("machine class %s not supported", class.Name)
 	}

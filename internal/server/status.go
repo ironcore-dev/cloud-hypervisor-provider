@@ -13,7 +13,7 @@ func (s *Server) Status(ctx context.Context, _ *iri.StatusRequest) (*iri.StatusR
 	log := s.loggerFrom(ctx)
 
 	var classes []*iri.MachineClassStatus
-	for _, class := range s.supportedMachineClasses.List() {
+	for _, class := range s.machineClassRegistry.List() {
 		classes = append(classes, &iri.MachineClassStatus{
 			MachineClass: &iri.MachineClass{
 				Name: class.Name,

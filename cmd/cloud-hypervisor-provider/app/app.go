@@ -289,8 +289,8 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	srv, err := server.New(machineStore, server.Options{
-		EventStore:              eventRecorder,
-		SupportedMachineClasses: classRegistry,
+		EventStore:           eventRecorder,
+		MachineClassRegistry: classRegistry,
 	})
 	if err != nil {
 		return fmt.Errorf("error creating server: %w", err)
