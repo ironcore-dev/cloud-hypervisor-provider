@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/server"
 )
 
-type MachineClassOptions []server.MachineClass
+type MachineClass struct {
+	Name        string
+	CpuMillis   int64
+	MemoryBytes int64
+}
+type MachineClassOptions []MachineClass
 
 func (ml *MachineClassOptions) String() string {
 	var parts []string
@@ -37,7 +40,7 @@ func (ml *MachineClassOptions) Set(value string) error {
 		return fmt.Errorf("invalid Memory value: %s", parts[2])
 	}
 
-	*ml = append(*ml, server.MachineClass{
+	*ml = append(*ml, MachineClass{
 		Name:        parts[0],
 		CpuMillis:   cpuMillis,
 		MemoryBytes: memoryBytes,

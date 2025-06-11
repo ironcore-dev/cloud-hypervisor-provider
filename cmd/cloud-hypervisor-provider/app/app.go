@@ -7,6 +7,7 @@ import (
 	"context"
 	goflag "flag"
 	"fmt"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/mcr"
 	"net"
 	"os"
 	"path/filepath"
@@ -132,6 +133,17 @@ func Command() *cobra.Command {
 func Run(ctx context.Context, opts Options) error {
 	log := ctrl.LoggerFrom(ctx)
 	setupLog := log.WithName("setup")
+
+	var classes []mcr.MachineClass
+	for _, class := range opts.MachineClasses {
+		classes = append(classes, mcr.MachineClass(class))
+	}
+
+	classRegistry, err := mcr.NewMachineClassRegistry(classes)
+	if err != nil {
+		setupLog.Error(err, "failed to initialize provider host")
+		return err
+	}
 
 	hostPaths, err := host.PathsAt(opts.RootDir)
 	if err != nil {
@@ -278,7 +290,7 @@ func Run(ctx context.Context, opts Options) error {
 
 	srv, err := server.New(machineStore, server.Options{
 		EventStore:              eventRecorder,
-		SupportedMachineClasses: opts.MachineClasses,
+		SupportedMachineClasses: classRegistry,
 	})
 	if err != nil {
 		return fmt.Errorf("error creating server: %w", err)

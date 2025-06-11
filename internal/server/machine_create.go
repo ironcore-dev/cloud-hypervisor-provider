@@ -13,10 +13,6 @@ import (
 	apiutils "github.com/ironcore-dev/provider-utils/apiutils/api"
 )
 
-func calcResources() (int64, int64) {
-	return 4, 1024
-}
-
 func (s *Server) createMachineFromIRIMachine(
 	ctx context.Context,
 	log logr.Logger,
@@ -33,7 +29,10 @@ func (s *Server) createMachineFromIRIMachine(
 		return nil, fmt.Errorf("iri machine metadata is nil")
 	}
 
-	cpu, memory := calcResources()
+	class, found := s.supportedMachineClasses.Get(iriMachine.Spec.Class)
+	if found {
+		return nil, fmt.Errorf("machine class %s not supported", class.Name)
+	}
 
 	power, err := s.getPowerStateFromIRI(iriMachine.Spec.Power)
 	if err != nil {
@@ -67,8 +66,8 @@ func (s *Server) createMachineFromIRIMachine(
 		},
 		Spec: api.MachineSpec{
 			Power:             power,
-			CpuMillis:         cpu,
-			MemoryBytes:       memory,
+			Cpu:               class.CpuMillis * 1000,
+			MemoryBytes:       class.MemoryBytes,
 			Volumes:           volumes,
 			Ignition:          iriMachine.Spec.IgnitionData,
 			NetworkInterfaces: networkInterfaces,

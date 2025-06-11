@@ -9,17 +9,11 @@ import (
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
 )
 
-type MachineClass struct {
-	Name        string
-	CpuMillis   int64
-	MemoryBytes int64
-}
-
-func (s *Server) Status(ctx context.Context, req *iri.StatusRequest) (*iri.StatusResponse, error) {
+func (s *Server) Status(ctx context.Context, _ *iri.StatusRequest) (*iri.StatusResponse, error) {
 	log := s.loggerFrom(ctx)
 
 	var classes []*iri.MachineClassStatus
-	for _, class := range s.supportedMachineClasses {
+	for _, class := range s.supportedMachineClasses.List() {
 		classes = append(classes, &iri.MachineClassStatus{
 			MachineClass: &iri.MachineClass{
 				Name: class.Name,

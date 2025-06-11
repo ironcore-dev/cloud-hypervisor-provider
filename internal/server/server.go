@@ -5,6 +5,8 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/mcr"
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
@@ -22,7 +24,7 @@ var _ iri.MachineRuntimeServer = (*Server)(nil)
 type Server struct {
 	idGen idgen.IDGen
 
-	supportedMachineClasses []MachineClass
+	supportedMachineClasses mcr.MachineClassRegistry
 
 	machineStore store.Store[*api.Machine]
 	eventStore   recorder.EventStore
@@ -33,7 +35,7 @@ type Options struct {
 
 	EventStore recorder.EventStore
 
-	SupportedMachineClasses []MachineClass
+	SupportedMachineClasses mcr.MachineClassRegistry
 }
 
 type nilEventStore struct{}
@@ -53,6 +55,10 @@ func setOptionsDefaults(o *Options) {
 
 func New(store store.Store[*api.Machine], opts Options) (*Server, error) {
 	setOptionsDefaults(&opts)
+
+	if opts.SupportedMachineClasses == nil {
+		return nil, fmt.Errorf("SupportedMachineClasses option is required")
+	}
 
 	return &Server{
 		idGen:                   opts.IDGen,

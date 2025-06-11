@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -301,8 +300,8 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[s
 	log.V(2).Info("Creating vm")
 	resp, err := apiClient.CreateVMWithResponse(ctx, client.CreateVMJSONRequestBody{
 		Cpus: &client.CpusConfig{
-			BootVcpus: int(math.Max(float64(machine.Spec.CpuMillis/1000), 1)),
-			MaxVcpus:  int(math.Max(float64(machine.Spec.CpuMillis/1000), 1)),
+			BootVcpus: int(machine.Spec.Cpu),
+			MaxVcpus:  int(machine.Spec.Cpu),
 		},
 		Devices: &dev,
 		Disks:   &disks,
