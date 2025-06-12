@@ -23,7 +23,7 @@ var _ = Describe("DetachNetworkInterface", func() {
 				},
 				Spec: &iri.MachineSpec{
 					Power: iri.Power_POWER_ON,
-					Class: machineClass,
+					Class: machineClassName,
 					NetworkInterfaces: []*iri.NetworkInterface{
 						{
 							Name:      "nic-1",

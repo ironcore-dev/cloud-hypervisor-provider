@@ -34,8 +34,8 @@ const (
 	pollingInterval      = 50 * time.Millisecond
 	consistentlyDuration = 1 * time.Second
 
-	machineClass  = "sample-machine-class"
-	emptyDiskSize = 1024 * 1024 * 1024
+	machineClassName = "sample-machine-class"
+	emptyDiskSize    = 1024 * 1024 * 1024
 )
 
 var (
@@ -84,7 +84,7 @@ var _ = BeforeEach(func() {
 
 	classRegistry, err := mcr.NewMachineClassRegistry([]mcr.MachineClass{
 		{
-			Name:        "experimental",
+			Name:        machineClassName,
 			CpuMillis:   1000,
 			MemoryBytes: 2147483648,
 		},

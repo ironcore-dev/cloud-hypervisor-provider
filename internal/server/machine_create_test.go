@@ -23,7 +23,7 @@ var _ = Describe("CreateMachine", func() {
 				},
 				Spec: &iri.MachineSpec{
 					Power: iri.Power_POWER_ON,
-					Class: machineClass,
+					Class: machineClassName,
 				},
 			},
 		})
@@ -35,7 +35,7 @@ var _ = Describe("CreateMachine", func() {
 			HaveField("Machine.Metadata.Id", Not(BeEmpty())),
 			HaveField("Machine.Spec.Power", iri.Power_POWER_ON),
 			HaveField("Machine.Spec.Image", BeNil()),
-			HaveField("Machine.Spec.Class", machineClass),
+			HaveField("Machine.Spec.Class", machineClassName),
 			HaveField("Machine.Spec.IgnitionData", BeNil()),
 			HaveField("Machine.Spec.Volumes", BeNil()),
 			HaveField("Machine.Spec.NetworkInterfaces", BeNil()),

@@ -30,7 +30,7 @@ var _ = Describe("ListMachine", func() {
 						Image: &iri.ImageSpec{
 							Image: "example.org/foo:latest",
 						},
-						Class: machineClass,
+						Class: machineClassName,
 						NetworkInterfaces: []*iri.NetworkInterface{
 							{
 								Name:      "primary-nic",

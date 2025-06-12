@@ -23,7 +23,7 @@ var _ = Describe("UpdateMachineAnnotations", func() {
 				},
 				Spec: &iri.MachineSpec{
 					Power: iri.Power_POWER_ON,
-					Class: machineClass,
+					Class: machineClassName,
 				},
 			},
 		})
