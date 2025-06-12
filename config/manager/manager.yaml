@@ -130,11 +130,11 @@ spec:
 #            periodSeconds: 10
           resources:
             limits:
-              cpu: 100m
-              memory: 50Mi
+              cpu: 2
+              memory: 2Gi
             requests:
               cpu: 100m
-              memory: 20Mi
+              memory: 512Mi
           volumeMounts:
             - name: var-run
               mountPath: /var/run

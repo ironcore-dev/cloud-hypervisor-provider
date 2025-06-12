@@ -227,10 +227,29 @@ func getMachineNameFromNicID(id string) *string {
 	return &parts[1]
 }
 
+func (r *MachineReconciler) isMachineCreated(ctx context.Context, log logr.Logger, machineID string) (bool, error) {
+	_, err := r.vmm.GetVM(ctx, machineID)
+	if err != nil {
+		if errors.Is(err, vmm.ErrVmNotCreated) {
+			return false, nil
+		}
+		return false, err
+	}
+	log.V(1).Info("Machine exists")
+	return true, nil
+}
+
 func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, machine *api.Machine) error {
 
-	if err := r.vmm.PowerOff(ctx, machine.ID); !errors.Is(err, vmm.ErrNotFound) {
-		return fmt.Errorf("failed to power off machine: %w", err)
+	existing, err := r.isMachineCreated(ctx, log, machine.ID)
+	if err != nil {
+		return err
+	}
+	if existing {
+		log.V(1).Info("Power off machine")
+		if err := r.vmm.PowerOff(ctx, machine.ID); !errors.Is(err, vmm.ErrNotFound) {
+			return fmt.Errorf("failed to power off machine: %w", err)
+		}
 	}
 
 	if err := r.vmm.KillVMM(ctx, machine.ID); !errors.Is(err, vmm.ErrNotFound) {
