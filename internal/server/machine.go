@@ -170,11 +170,11 @@ func (s *Server) getIRIMachineStatus(machine *api.Machine) (*iri.MachineStatus, 
 	}, nil
 }
 
-func (s *Server) getIRINICState(state api.NetworkInterfaceState) (iri.NetworkInterfaceState, error) {
+func (s *Server) getIRINICState(state api.MachineNetworkInterfaceState) (iri.NetworkInterfaceState, error) {
 	switch state {
-	case api.NetworkInterfaceStateAttached:
+	case api.MachineNetworkInterfaceStateAttached:
 		return iri.NetworkInterfaceState_NETWORK_INTERFACE_ATTACHED, nil
-	case api.NetworkInterfaceStatePending:
+	case api.MachineNetworkInterfaceStatePending:
 		return iri.NetworkInterfaceState_NETWORK_INTERFACE_PENDING, nil
 	default:
 		return 0, fmt.Errorf("unknown network interface state '%q'", state)

@@ -227,25 +227,29 @@ func getMachineNameFromNicID(id string) *string {
 	return &parts[1]
 }
 
-func (r *MachineReconciler) isMachineCreated(ctx context.Context, log logr.Logger, machineID string) (bool, error) {
-	_, err := r.vmm.GetVM(ctx, machineID)
+func (r *MachineReconciler) getMachineState(
+	ctx context.Context, machineID string,
+) (client.VmInfoState, error) {
+	vm, err := r.vmm.GetVM(ctx, machineID)
 	if err != nil {
-		if errors.Is(err, vmm.ErrVmNotCreated) {
-			return false, nil
+		if errors.Is(err, vmm.ErrVmNotCreated) || errors.Is(err, vmm.ErrNotFound) {
+			return client.Shutdown, nil
 		}
-		return false, err
+		return client.Shutdown, err
 	}
-	log.V(1).Info("Machine exists")
-	return true, nil
+	if vm.State == client.Running {
+		return client.Running, nil
+	}
+	return client.Shutdown, nil
 }
 
 func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, machine *api.Machine) error {
 
-	existing, err := r.isMachineCreated(ctx, log, machine.ID)
+	state, err := r.getMachineState(ctx, machine.ID)
 	if err != nil {
 		return err
 	}
-	if existing {
+	if state == client.Running {
 		log.V(1).Info("Power off machine")
 		if err := r.vmm.PowerOff(ctx, machine.ID); !errors.Is(err, vmm.ErrNotFound) {
 			return fmt.Errorf("failed to power off machine: %w", err)
@@ -405,39 +409,75 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 
 	vm, err := r.vmm.GetVM(ctx, machine.ID)
 	if err != nil {
-		if errors.Is(err, vmm.ErrVmNotCreated) {
-			log.V(1).Info("VM not created", "machine", machine.ID)
+		if !errors.Is(err, vmm.ErrVmNotCreated) {
+			return fmt.Errorf("failed to get vm: %w", err)
+		}
 
-			if !r.nicsReady(nics) {
-				log.V(1).Info("Not all Network Interfaces are ready")
-				return nil
-			}
+		log.V(1).Info("VM not created", "machine", machine.ID)
 
-			if err := r.vmm.CreateVM(ctx, machine, nics); err != nil {
-				log.V(1).Info("Failed to create VM", "machine", machine.ID)
-				return fmt.Errorf("failed to create VM: %w", err)
-			}
-
-			for _, nic := range nics {
-				if err := r.addFinalizerToNIC(ctx, nic); err != nil {
-					return fmt.Errorf("failed to add finalizer to NIC: %w", err)
-				}
-			}
-
-			log.V(1).Info("Successfully created VM, requeue", "machine", machine.ID)
-			r.queue.Add(machine.ID)
+		if !r.nicsReady(nics) {
+			log.V(1).Info("Not all Network Interfaces are ready")
 			return nil
 		}
+
+		if err := r.vmm.CreateVM(ctx, machine, nics); err != nil {
+			log.V(1).Info("Failed to create VM", "machine", machine.ID)
+			return fmt.Errorf("failed to create VM: %w", err)
+		}
+
+		for _, nic := range nics {
+			if err := r.addFinalizerToNIC(ctx, nic); err != nil {
+				return fmt.Errorf("failed to add finalizer to NIC: %w", err)
+			}
+		}
+
+		log.V(1).Info("Successfully created VM, requeue", "machine", machine.ID)
+		r.queue.Add(machine.ID)
+		return nil
 	}
 
-	//power on & power off
-	switch {
-	case vm.State != client.Running:
-		_ = r.vmm.PowerOn(ctx, machine.ID)
+	switch machine.Spec.Power {
+	case api.PowerStatePowerOn:
+		if vm.State != client.Running {
+			if err := r.vmm.PowerOn(ctx, machine.ID); err != nil {
+				return fmt.Errorf("failed to power on VM: %w", err)
+			}
+		}
+	case api.PowerStatePowerOff:
+		if vm.State == client.Running {
+			if err := r.vmm.PowerOff(ctx, machine.ID); err != nil {
+				return fmt.Errorf("failed to power off VM: %w", err)
+			}
+		}
 	}
 
 	if err := r.reconcileNics(ctx, log, machine, nics, ptr.Deref(vm.Config.Devices, nil)); err != nil {
 		return fmt.Errorf("failed to reconcile nics: %w", err)
+	}
+
+	switch machine.Spec.Power {
+	case api.PowerStatePowerOn:
+		machine.Status.State = api.MachineStateRunning
+	case api.PowerStatePowerOff:
+		machine.Status.State = api.MachineStateTerminated
+	}
+	machine.Status.NetworkInterfaceStatus = []api.MachineNetworkInterfaceStatus{}
+	for _, nic := range machine.Spec.NetworkInterfaces {
+		nicStatus := api.MachineNetworkInterfaceStatus{
+			Name:  nic.Name,
+			State: api.MachineNetworkInterfaceStatePending,
+		}
+
+		if n, ok := nics[nic.Name]; ok && n.Status.State == api.NetworkInterfaceStateAttached {
+			nicStatus.State = api.MachineNetworkInterfaceStateAttached
+			nicStatus.Handle = n.Status.Handle
+		}
+
+		machine.Status.NetworkInterfaceStatus = append(machine.Status.NetworkInterfaceStatus, nicStatus)
+	}
+	machine, err = r.machines.Update(ctx, machine)
+	if err != nil {
+		return fmt.Errorf("failed to update machine status: %w", err)
 	}
 
 	log.V(1).Info("Successfully reconciled VM", "machine", machine.ID)

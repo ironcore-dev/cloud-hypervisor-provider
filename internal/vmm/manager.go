@@ -198,13 +198,15 @@ func (m *Manager) ping(ctx context.Context, machineId string) error {
 		return fmt.Errorf("failed to ping vmm: %w", err)
 	}
 
-	log.V(2).Info(
-		"ping vmm",
-		"version", ping.JSON200.Version,
-		"pid", ptr.Deref(ping.JSON200.Pid, -1),
-		"features", ptr.Deref(ping.JSON200.Features, nil),
-		"build-version", ptr.Deref(ping.JSON200.BuildVersion, ""),
-	)
+	if ping.JSON200 != nil {
+		log.V(2).Info(
+			"ping vmm",
+			"version", ping.JSON200.Version,
+			"pid", ptr.Deref(ping.JSON200.Pid, -1),
+			"features", ptr.Deref(ping.JSON200.Features, nil),
+			"build-version", ptr.Deref(ping.JSON200.BuildVersion, ""),
+		)
+	}
 
 	return nil
 }
@@ -227,7 +229,8 @@ func (m *Manager) GetVM(ctx context.Context, machineId string) (*client.VmInfo, 
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
-		if string(resp.Body) == "VM is not created" {
+		log.V(1).Info("Failed to get vm", "error", string(resp.Body))
+		if string(resp.Body) == "Error from API: The VM info is not available: VM is not created" {
 			return nil, ErrVmNotCreated
 		}
 		return nil, err
@@ -322,6 +325,7 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[s
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
+		log.V(1).Info("Failed to create vm", "error", string(resp.Body))
 		return err
 	}
 
@@ -347,6 +351,7 @@ func (m *Manager) RemoveDevice(ctx context.Context, machineId string, deviceID s
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
+		log.V(1).Info("Failed to remove device", "error", string(resp.Body))
 		return err
 	}
 	log.V(1).Info("Removed device from on machine", "deviceID", deviceID)
@@ -383,6 +388,7 @@ func (m *Manager) AddNIC(ctx context.Context, machineId string, nic *api.Network
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
+		log.V(1).Info("Failed to add nic", "error", string(resp.Body))
 		return err
 	}
 	log.V(1).Info("Added device", "nicName", nicName)
@@ -407,6 +413,7 @@ func (m *Manager) PowerOn(ctx context.Context, machineId string) error {
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
+		log.V(1).Info("Failed to boot vm", "error", string(resp.Body))
 		return err
 	}
 	log.V(1).Info("Powered on machine")
@@ -431,6 +438,7 @@ func (m *Manager) PowerOff(ctx context.Context, machineId string) error {
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
+		log.V(1).Info("Failed to shutdown vm", "error", string(resp.Body))
 		return err
 	}
 	log.V(1).Info("Powered off machine")

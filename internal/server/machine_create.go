@@ -32,7 +32,7 @@ func (s *Server) createMachineFromIRIMachine(
 
 	class, found := s.machineClassRegistry.Get(iriMachine.Spec.Class)
 	if !found {
-		return nil, fmt.Errorf("machine class %s not supported", class.Name)
+		return nil, fmt.Errorf("machine class %s not supported", iriMachine.Spec.Class)
 	}
 
 	power, err := s.getPowerStateFromIRI(iriMachine.Spec.Power)

@@ -106,9 +106,9 @@ type MachineNetworkInterfaceSpec struct {
 }
 
 type MachineNetworkInterfaceStatus struct {
-	Name   string                `json:"name"`
-	Handle string                `json:"handle"`
-	State  NetworkInterfaceState `json:"state"`
+	Name   string                       `json:"name"`
+	Handle string                       `json:"handle"`
+	State  MachineNetworkInterfaceState `json:"state"`
 }
 
 type MachineNetworkInterfaceState string
