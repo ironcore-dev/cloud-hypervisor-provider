@@ -127,7 +127,7 @@ func (r *NetworkInterfaceReconciler) processNextWorkItem(ctx context.Context, lo
 func (r *NetworkInterfaceReconciler) reconcileNetworkInterface(ctx context.Context, id string) error {
 	log := logr.FromContextOrDiscard(ctx)
 
-	log.V(2).Info("Getting machine from store", "id", id)
+	log.V(2).Info("Getting nic from store", "id", id)
 	nic, err := r.nics.Get(ctx, id)
 	if err != nil {
 		if !errors.Is(err, store.ErrNotFound) {

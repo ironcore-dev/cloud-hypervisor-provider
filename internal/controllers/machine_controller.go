@@ -131,6 +131,7 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 
 	machineEventHandlerRegistration, err := r.machineEvents.AddHandler(
 		event.HandlerFunc[*api.Machine](func(evt event.Event[*api.Machine]) {
+			log.V(2).Info("Machine event received", "type", evt.Type, "id", evt.Object.ID)
 			r.queue.Add(evt.Object.ID)
 		}))
 	if err != nil {
@@ -144,6 +145,7 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 
 	nicEventHandlerRegistration, err := r.nicEvents.AddHandler(
 		event.HandlerFunc[*api.NetworkInterface](func(evt event.Event[*api.NetworkInterface]) {
+			log.V(2).Info("NIC event received", "type", evt.Type, "id", evt.Object.ID)
 			machineID := getMachineNameFromNicID(evt.Object.ID)
 			if machineID != nil {
 				r.queue.Add(ptr.Deref(machineID, ""))

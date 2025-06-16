@@ -185,12 +185,13 @@ func (s *Server) getIRIVolumeState(state api.VolumeState) (iri.VolumeState, erro
 	switch state {
 	case api.VolumeStateAttached:
 		return iri.VolumeState_VOLUME_ATTACHED, nil
+	//	TODO
+	case "":
+		fallthrough
 	case api.VolumeStatePending:
 		return iri.VolumeState_VOLUME_PENDING, nil
 	default:
-		return iri.VolumeState_VOLUME_PENDING, nil
-		// TODO
-		//return 0, fmt.Errorf("unknown volume state '%q'", state)
+		return 0, fmt.Errorf("unknown volume state '%q'", state)
 	}
 }
 

@@ -379,6 +379,11 @@ func RunGRPCServer(ctx context.Context, setupLog, log logr.Logger, srv *server.S
 		return fmt.Errorf("failed to listen: %w", err)
 	}
 
+	err = os.Chmod(address, 0666)
+	if err != nil {
+		return fmt.Errorf("failed to chmod socket: %w", err)
+	}
+
 	setupLog.Info("Starting grpc server", "Address", l.Addr().String())
 	go func() {
 		<-ctx.Done()

@@ -58,8 +58,6 @@ RUN apt-get update && apt-get install -y  \
 COPY --from=builder /workspace/bin/cloud-hypervisor-provider .
 COPY --from=builder /workspace/bin/irictl-machine .
 
-USER 65532:65532
-
 ENTRYPOINT ["/cloud-hypervisor-provider"]
 
 

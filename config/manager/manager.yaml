@@ -115,8 +115,6 @@ spec:
           name: provider
           securityContext:
             privileged: true
-            runAsGroup: 65532
-            runAsUser: 65532
 #          livenessProbe:
 #            httpGet:
 #              path: /healthz
@@ -129,13 +127,13 @@ spec:
 #              port: 8081
 #            initialDelaySeconds: 5
 #            periodSeconds: 10
-          resources:
-            limits:
-              cpu: 2
-              memory: 2Gi
-            requests:
-              cpu: 100m
-              memory: 512Mi
+#          resources:
+#            limits:
+#              cpu: 2
+#              memory: 2Gi
+#            requests:
+#              cpu: 100m
+#              memory: 512Mi
           volumeMounts:
             - name: var-run
               mountPath: /var/run
@@ -145,6 +143,8 @@ spec:
               mountPath: /dev/kvm
             - name: vhost
               mountPath: /dev/vhost-net
+            - mountPath: /dev/vfio
+              name: vfio
       volumes:
         - name: var-run
           emptyDir: { }
@@ -168,10 +168,9 @@ spec:
           hostPath:
             path: /dev/vhost-net
             type: CharDevice
+        - hostPath:
+            path: /dev/vfio
+            type: Directory
+          name: vfio
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
-      securityContext:
-        runAsGroup: 65532
-        runAsUser: 65532
-        supplementalGroups:
-          - 108
