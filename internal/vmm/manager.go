@@ -260,6 +260,15 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[s
 		Kernel:    nil,
 	}
 
+	var platform *client.PlatformConfig
+	if machine.Spec.Ignition != nil {
+		platform = &client.PlatformConfig{
+			OemStrings: ptr.To([]string{
+				string(machine.Spec.Ignition),
+			}),
+		}
+	}
+
 	var disks []client.DiskConfig
 	if ptr.Deref(machine.Spec.Image, "") != "" {
 		disks = append(disks, client.DiskConfig{
@@ -318,7 +327,8 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[s
 		Serial: &client.ConsoleConfig{
 			Mode: "Tty",
 		},
-		Payload: payload,
+		Payload:  payload,
+		Platform: platform,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to get vm: %w", err)
