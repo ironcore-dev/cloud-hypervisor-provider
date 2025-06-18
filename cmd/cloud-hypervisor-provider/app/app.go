@@ -51,8 +51,8 @@ func init() {
 type Options struct {
 	Address string
 
-	RootDir   string
-	DetachVms bool
+	RootDir string
+	Detach  bool
 
 	MachineClasses MachineClassOptions
 
@@ -87,10 +87,10 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	)
 
 	fs.BoolVar(
-		&o.DetachVms,
-		"detach-vms",
+		&o.Detach,
+		"detach",
 		true,
-		"Detach VMs processes from manager process.",
+		"Detach processes from manager process.",
 	)
 
 	fs.Var(
@@ -182,7 +182,7 @@ func Run(ctx context.Context, opts Options) error {
 			hostPaths,
 			//TODO flag
 			"/usr/bin/qemu-storage-daemon",
-			false,
+			opts.Detach,
 		)),
 	}); err != nil {
 		setupLog.Error(err, "failed to initialize plugins")
@@ -248,7 +248,7 @@ func Run(ctx context.Context, opts Options) error {
 	virtualMachineManager := vmm.NewManager(hostPaths, vmm.ManagerOptions{
 		CloudHypervisorBin: opts.CloudHypervisorBinPath,
 		Logger:             log.WithName("virtual-machine-manager"),
-		DetachVms:          opts.DetachVms,
+		DetachVms:          opts.Detach,
 		FirmwarePath:       opts.CloudHypervisorFirmwarePath,
 	})
 
