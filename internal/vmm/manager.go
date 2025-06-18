@@ -87,7 +87,7 @@ func (m *Manager) initVmm(log logr.Logger, apiSocket string) error {
 	if m.detachVms {
 		log.V(1).Info("Start cloud-hypervisor detached")
 		if err := process.SpawnDetached(
-			log, m.cloudHypervisorBin, args, nil); err != nil {
+			log, m.cloudHypervisorBin, args, nil, nil); err != nil {
 			return fmt.Errorf("failed to spawn host process: %w", err)
 		}
 		return nil

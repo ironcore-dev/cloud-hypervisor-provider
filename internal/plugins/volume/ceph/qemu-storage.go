@@ -190,7 +190,11 @@ func (q *QemuStorage) startDaemon(
 
 	if q.detach {
 		log.V(1).Info("Start qemu-storage-daemon detached")
-		if err := process.SpawnDetached(log, q.bin, args, postExecFunc); err != nil {
+		if err := process.SpawnDetached(log, q.bin, args,
+			func(cmd *exec.Cmd) {
+				cmd.Dir = q.volumeDir(machineID, volume.handle)
+			},
+			postExecFunc); err != nil {
 			return fmt.Errorf("failed to spawn host process: %w", err)
 		}
 		return nil
