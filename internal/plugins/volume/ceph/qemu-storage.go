@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/process"
 	"github.com/ironcore-dev/ironcore/broker/common"
 )
 
@@ -141,8 +142,7 @@ func (q *QemuStorage) startDaemon(
 		return fmt.Errorf("error cleaning up socket: %w", err)
 	}
 
-	cmd := []string{
-		q.bin,
+	args := []string{
 		"--blockdev",
 		fmt.Sprintf(
 			"driver=rbd,node-name=%s,pool=%s,image=%s,discard=unmap,cache.direct=on,user=%s,conf=%s",
@@ -161,16 +161,45 @@ func (q *QemuStorage) startDaemon(
 		),
 	}
 
-	log.V(1).Info("Start qemu-storage-daemon", "cmd", cmd)
-	process := exec.Command(cmd[0], cmd[1:]...)
-	process.Dir = q.volumeDir(machineID, volume.handle)
+	postExecFunc := func(pid int) error {
+		if err := waitForSocketWithTimeout(ctx, 2*time.Second, socket); err != nil {
+			p, findError := os.FindProcess(pid)
+			if findError != nil {
+				log.V(1).Info("failed to qemu-storage-daemon process")
+			}
 
-	if q.detach {
-		process.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid: true,
+			if p.Kill() != nil {
+				log.V(1).Info("failed to kill qemu-storage-daemon process")
+			}
+
+			return fmt.Errorf("error waiting for socket: %w", err)
 		}
+
+		pidPath := q.pidFilePath(machineID, volume.handle)
+		pidFile, err := os.OpenFile(pidPath, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("error opening conf file %s: %w", pidPath, err)
+		}
+
+		if _, err := fmt.Fprintf(pidFile, "%d", pid); err != nil {
+			return fmt.Errorf("error writing to pid file %s: %w", confPath, err)
+		}
+
+		return nil
 	}
 
+	if q.detach {
+		log.V(1).Info("Start qemu-storage-daemon detached")
+		if err := process.SpawnDetached(log, q.bin, args, postExecFunc); err != nil {
+			return fmt.Errorf("failed to spawn host process: %w", err)
+		}
+		return nil
+
+	}
+
+	log.V(1).Info("Start qemu-storage-daemon", "bin", q.bin, "args", args)
+	process := exec.Command(q.bin, args...)
+	process.Dir = q.volumeDir(machineID, volume.handle)
 	process.Stdout = os.Stdout // Print output directly to console
 	process.Stderr = os.Stderr // Print errors directly to console
 
@@ -179,7 +208,6 @@ func (q *QemuStorage) startDaemon(
 		return fmt.Errorf("failed to start qemu-storage-daemon: %w", err)
 	}
 
-	log.V(2).Info("Wait for socket", "path", socket)
 	if err := waitForSocketWithTimeout(ctx, 2*time.Second, socket); err != nil {
 		if process.Process != nil {
 			if err := process.Process.Kill(); err != nil {

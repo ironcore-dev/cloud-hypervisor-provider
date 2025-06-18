@@ -12,13 +12,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/process"
 	"github.com/ironcore-dev/ironcore/broker/common"
 	utilssync "github.com/ironcore-dev/provider-utils/storeutils/sync"
 	"k8s.io/utils/ptr"
@@ -77,23 +77,24 @@ func (m *Manager) initVmm(log logr.Logger, apiSocket string) error {
 		return fmt.Errorf("error cleaning up socket: %w", err)
 	}
 
-	chCmd := []string{
-		m.cloudHypervisorBin,
+	args := []string{
 		"--api-socket",
 		apiSocket,
 		//TODO fix
 		"-v",
 	}
 
-	log.V(1).Info("Start cloud-hypervisor", "cmd", chCmd)
-	cmd := exec.Command(chCmd[0], chCmd[1:]...)
-
 	if m.detachVms {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid: true,
+		log.V(1).Info("Start cloud-hypervisor detached")
+		if err := process.SpawnDetached(
+			log, m.cloudHypervisorBin, args, nil); err != nil {
+			return fmt.Errorf("failed to spawn host process: %w", err)
 		}
+		return nil
 	}
 
+	log.V(1).Info("Start cloud-hypervisor", "bin", m.cloudHypervisorBin, "args", args)
+	cmd := exec.Command(m.cloudHypervisorBin, args...)
 	cmd.Stdout = os.Stdout // Print output directly to console
 	cmd.Stderr = os.Stderr // Print errors directly to console
 
