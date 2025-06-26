@@ -8,58 +8,88 @@ import (
 	b64 "encoding/base64"
 	"errors"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
-	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
-	"github.com/ironcore-dev/ironcore/broker/common"
 	utilssync "github.com/ironcore-dev/provider-utils/storeutils/sync"
-	"k8s.io/utils/ptr"
-)
-
-const (
-	DefaultSocketName = "api.sock"
 )
 
 type ManagerOptions struct {
-	CloudHypervisorBin string
-	FirmwarePath       string
-	Logger             logr.Logger
-
-	DetachVms bool
+	CHSocketsPath     string
+	FirmwarePath      string
+	ReservedInstances []string
 }
 
-func NewManager(paths host.Paths, opts ManagerOptions) *Manager {
-	return &Manager{
-		vms:  make(map[string]*client.ClientWithResponses),
-		idMu: utilssync.NewMutexMap[string](),
+func NewManager(log logr.Logger, paths host.Paths, opts ManagerOptions) (*Manager, error) {
+	initLog := log.WithName("init")
 
-		paths:              paths,
-		cloudHypervisorBin: opts.CloudHypervisorBin,
-		firmwarePath:       opts.FirmwarePath,
-		log:                opts.Logger,
-		detachVms:          opts.DetachVms,
+	entries, err := os.ReadDir(opts.CHSocketsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cloud-hypervisor sockets dir: %w", err)
 	}
+
+	m := &Manager{
+		idMu:         utilssync.NewMutexMap[string](),
+		instances:    make(map[string]*client.ClientWithResponses),
+		active:       make(map[string]bool),
+		paths:        paths,
+		firmwarePath: opts.FirmwarePath,
+		log:          log,
+		nextFree:     make(chan string, len(entries)),
+	}
+	reserved := sets.NewString(opts.ReservedInstances...)
+	for _, v := range entries {
+		if v.IsDir() {
+			continue
+		}
+		if filepath.Ext(v.Name()) != ".sock" {
+			continue
+		}
+
+		socketPath := filepath.Join(opts.CHSocketsPath, v.Name())
+
+		apiClient, err := newUnixSocketClient(socketPath)
+		if err != nil {
+			initLog.V(1).Info("Failed to init cloud-hypervisor client", "path", socketPath)
+			continue
+		}
+
+		initLog.V(2).Info("Created cloud-hypervisor client", "socketPath", socketPath)
+		m.instances[socketPath] = apiClient
+		m.active[socketPath] = true
+
+		if _, err := m.GetVM(context.TODO(), socketPath); errors.Is(err, ErrVmNotCreated) {
+			if !reserved.Has(socketPath) {
+				m.nextFree <- socketPath
+			} else {
+				initLog.V(2).Info("Socket blocked and skipped", "socketPath", socketPath)
+			}
+		}
+	}
+
+	initLog.V(1).Info("Successfully initialized clients", "num", len(m.instances))
+
+	return m, nil
 }
 
 type Manager struct {
 	log logr.Logger
 
-	vms  map[string]*client.ClientWithResponses
-	idMu *utilssync.MutexMap[string]
+	idMu      *utilssync.MutexMap[string]
+	instances map[string]*client.ClientWithResponses
+	active    map[string]bool
 
-	paths              host.Paths
-	cloudHypervisorBin string
-	firmwarePath       string
+	nextFree chan string
 
-	detachVms bool
+	paths        host.Paths
+	firmwarePath string
 }
 
 var (
@@ -71,125 +101,16 @@ var (
 	ErrVmNotCreated = errors.New("vm is not created")
 )
 
-func (m *Manager) initVmm(log logr.Logger, apiSocket string) error {
-	log.V(2).Info("Cleaning up any previous socket")
-	if err := common.CleanupSocketIfExists(apiSocket); err != nil {
-		return fmt.Errorf("error cleaning up socket: %w", err)
-	}
-
-	chCmd := []string{
-		m.cloudHypervisorBin,
-		"--api-socket",
-		apiSocket,
-		//TODO fix
-		"-v",
-	}
-
-	log.V(1).Info("Start cloud-hypervisor", "cmd", chCmd)
-	cmd := exec.Command(chCmd[0], chCmd[1:]...)
-
-	if m.detachVms {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid: true,
-		}
-	}
-
-	cmd.Stdout = os.Stdout // Print output directly to console
-	cmd.Stderr = os.Stderr // Print errors directly to console
-
-	log.V(1).Info("Starting vmm")
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to init cloud-hypervisor: %w", err)
-	}
-
-	return nil
+func (m *Manager) Ping(ctx context.Context, instanceID string) error {
+	m.idMu.Lock(instanceID)
+	defer m.idMu.Unlock(instanceID)
+	return m.ping(ctx, instanceID)
 }
 
-func (m *Manager) InitVMM(ctx context.Context, machineId string) error {
-	m.idMu.Lock(machineId)
-	defer m.idMu.Unlock(machineId)
+func (m *Manager) ping(ctx context.Context, instanceID string) error {
+	log := m.log.WithValues("instanceID", instanceID)
 
-	log := m.log.WithValues("machineID", machineId)
-	apiSocket := filepath.Join(m.paths.MachineDir(machineId), DefaultSocketName)
-
-	log.V(2).Info("Checking if vmm socket is present", "path", apiSocket)
-	present, err := isSocketPresent(apiSocket)
-	if err != nil {
-		return fmt.Errorf("error checking if %s is a socket: %w", apiSocket, err)
-	}
-
-	var active bool
-	if present {
-		log.V(2).Info("Checking if vmm socket is active", "path", apiSocket)
-		active, err = isSocketActive(apiSocket)
-		if err != nil {
-			return fmt.Errorf("error checking if %s is a active socket: %w", apiSocket, err)
-		}
-	}
-
-	if !present || !active {
-		log.V(1).Info("VMM socket is not present, create it", "path", apiSocket)
-		if err := m.initVmm(log, apiSocket); err != nil {
-			return fmt.Errorf("error initializing vmm: %w", err)
-		}
-	}
-
-	log.V(2).Info("Wait for socket", "path", apiSocket)
-	if err := waitForSocketWithTimeout(ctx, 2*time.Second, apiSocket); err != nil {
-		return fmt.Errorf("error waiting for socket: %w", err)
-	}
-
-	log.V(2).Info("Checking if client is present")
-	if _, found := m.vms[machineId]; !found {
-		log.V(1).Info("Client is not present, create it")
-		apiClient, err := newUnixSocketClient(apiSocket)
-		if err != nil {
-			return fmt.Errorf("failed to init cloud-hypervisor client: %w", err)
-		}
-
-		m.vms[machineId] = apiClient
-	}
-
-	log.V(2).Info("VMM initialized")
-	return nil
-}
-
-func (m *Manager) KillVMM(ctx context.Context, machineId string) error {
-	m.idMu.Lock(machineId)
-	defer m.idMu.Unlock(machineId)
-
-	log := m.log.WithValues("machineID", machineId)
-
-	apiClient, found := m.vms[machineId]
-	if !found {
-		return ErrNotFound
-	}
-
-	log.V(2).Info("Getting vm")
-	resp, err := apiClient.ShutdownVMMWithResponse(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get vm: %w", err)
-	}
-
-	if err := validateStatus(resp.StatusCode()); err != nil {
-		return err
-	}
-
-	delete(m.vms, machineId)
-
-	return nil
-}
-
-func (m *Manager) Ping(ctx context.Context, machineId string) error {
-	m.idMu.Lock(machineId)
-	defer m.idMu.Unlock(machineId)
-	return m.ping(ctx, machineId)
-}
-
-func (m *Manager) ping(ctx context.Context, machineId string) error {
-	log := m.log.WithValues("machineID", machineId)
-
-	apiClient, found := m.vms[machineId]
+	apiClient, found := m.instances[instanceID]
 	if !found {
 		return ErrNotFound
 	}
@@ -212,13 +133,22 @@ func (m *Manager) ping(ctx context.Context, machineId string) error {
 	return nil
 }
 
-func (m *Manager) GetVM(ctx context.Context, machineId string) (*client.VmInfo, error) {
-	m.idMu.Lock(machineId)
-	defer m.idMu.Unlock(machineId)
+func (m *Manager) GetFreeApiSocket() (*string, error) {
+	select {
+	case socket := <-m.nextFree:
+		return ptr.To(socket), nil
+	default:
+		return nil, fmt.Errorf("no free socket available")
+	}
+}
 
-	log := m.log.WithValues("machineID", machineId)
+func (m *Manager) GetVM(ctx context.Context, instanceID string) (*client.VmInfo, error) {
+	m.idMu.Lock(instanceID)
+	defer m.idMu.Unlock(instanceID)
 
-	apiClient, found := m.vms[machineId]
+	log := m.log.WithValues("instanceID", instanceID)
+
+	apiClient, found := m.instances[instanceID]
 	if !found {
 		return nil, ErrNotFound
 	}
@@ -230,10 +160,10 @@ func (m *Manager) GetVM(ctx context.Context, machineId string) (*client.VmInfo, 
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
-		log.V(1).Info("Failed to get vm", "error", string(resp.Body))
 		if string(resp.Body) == "Error from API: The VM info is not available: VM is not created" {
 			return nil, ErrVmNotCreated
 		}
+		log.V(1).Info("Failed to get vm", "error", string(resp.Body))
 		return nil, err
 	}
 
@@ -241,13 +171,13 @@ func (m *Manager) GetVM(ctx context.Context, machineId string) (*client.VmInfo, 
 }
 
 func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[string]*api.NetworkInterface) error {
-	machineId := machine.ID
-	m.idMu.Lock(machineId)
-	defer m.idMu.Unlock(machineId)
+	instanceID := ptr.Deref(machine.Spec.ApiSocketPath, "")
+	m.idMu.Lock(instanceID)
+	defer m.idMu.Unlock(instanceID)
 
-	log := m.log.WithValues("machineID", machineId)
+	log := m.log.WithValues("instanceID", instanceID)
 
-	apiClient, found := m.vms[machineId]
+	apiClient, found := m.instances[instanceID]
 	if !found {
 		return ErrNotFound
 	}
@@ -261,19 +191,20 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[s
 		Kernel:    nil,
 	}
 
-	var platform *client.PlatformConfig
+	platform := &client.PlatformConfig{
+		Uuid: ptr.To(machine.ID),
+	}
+
 	if machine.Spec.Ignition != nil {
-		platform = &client.PlatformConfig{
-			OemStrings: ptr.To([]string{
-				b64.StdEncoding.EncodeToString(machine.Spec.Ignition),
-			}),
-		}
+		platform.OemStrings = ptr.To([]string{
+			b64.StdEncoding.EncodeToString(machine.Spec.Ignition),
+		})
 	}
 
 	var disks []client.DiskConfig
 	if ptr.Deref(machine.Spec.Image, "") != "" {
 		disks = append(disks, client.DiskConfig{
-			Path: ptr.To(m.paths.MachineRootFSFile(machineId)),
+			Path: ptr.To(m.paths.MachineRootFSFile(machine.ID)),
 		})
 	}
 
@@ -343,13 +274,13 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[s
 	return nil
 }
 
-func (m *Manager) RemoveDevice(ctx context.Context, machineId string, deviceID string) error {
-	m.idMu.Lock(machineId)
-	defer m.idMu.Unlock(machineId)
+func (m *Manager) RemoveDevice(ctx context.Context, instanceID string, deviceID string) error {
+	m.idMu.Lock(instanceID)
+	defer m.idMu.Unlock(instanceID)
 
-	log := m.log.WithValues("machineID", machineId)
+	log := m.log.WithValues("instanceID", instanceID)
 
-	apiClient, found := m.vms[machineId]
+	apiClient, found := m.instances[instanceID]
 	if !found {
 		return ErrNotFound
 	}
@@ -370,11 +301,11 @@ func (m *Manager) RemoveDevice(ctx context.Context, machineId string, deviceID s
 	return nil
 }
 
-func (m *Manager) AddNIC(ctx context.Context, machineId string, nic *api.NetworkInterface) error {
-	m.idMu.Lock(machineId)
-	defer m.idMu.Unlock(machineId)
+func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.NetworkInterface) error {
+	m.idMu.Lock(instanceID)
+	defer m.idMu.Unlock(instanceID)
 
-	log := m.log.WithValues("machineID", machineId)
+	log := m.log.WithValues("instanceID", instanceID)
 
 	if nic.Status.State != api.NetworkInterfaceStateAttached {
 		return fmt.Errorf("nic %s is not attached", nic.ID)
@@ -385,7 +316,7 @@ func (m *Manager) AddNIC(ctx context.Context, machineId string, nic *api.Network
 		return err
 	}
 
-	apiClient, found := m.vms[machineId]
+	apiClient, found := m.instances[instanceID]
 	if !found {
 		return ErrNotFound
 	}
@@ -407,13 +338,13 @@ func (m *Manager) AddNIC(ctx context.Context, machineId string, nic *api.Network
 	return nil
 }
 
-func (m *Manager) PowerOn(ctx context.Context, machineId string) error {
-	m.idMu.Lock(machineId)
-	defer m.idMu.Unlock(machineId)
+func (m *Manager) PowerOn(ctx context.Context, instanceID string) error {
+	m.idMu.Lock(instanceID)
+	defer m.idMu.Unlock(instanceID)
 
-	log := m.log.WithValues("machineID", machineId)
+	log := m.log.WithValues("instanceID", instanceID)
 
-	apiClient, found := m.vms[machineId]
+	apiClient, found := m.instances[instanceID]
 	if !found {
 		return ErrNotFound
 	}
@@ -432,13 +363,13 @@ func (m *Manager) PowerOn(ctx context.Context, machineId string) error {
 	return nil
 }
 
-func (m *Manager) PowerOff(ctx context.Context, machineId string) error {
-	m.idMu.Lock(machineId)
-	defer m.idMu.Unlock(machineId)
+func (m *Manager) PowerOff(ctx context.Context, instanceID string) error {
+	m.idMu.Lock(instanceID)
+	defer m.idMu.Unlock(instanceID)
 
-	log := m.log.WithValues("machineID", machineId)
+	log := m.log.WithValues("instanceID", instanceID)
 
-	apiClient, found := m.vms[machineId]
+	apiClient, found := m.instances[instanceID]
 	if !found {
 		return ErrNotFound
 	}
@@ -453,6 +384,31 @@ func (m *Manager) PowerOff(ctx context.Context, machineId string) error {
 		return err
 	}
 	log.V(1).Info("Powered off machine")
+
+	return nil
+}
+
+func (m *Manager) Delete(ctx context.Context, instanceID string) error {
+	m.idMu.Lock(instanceID)
+	defer m.idMu.Unlock(instanceID)
+
+	log := m.log.WithValues("instanceID", instanceID)
+
+	apiClient, found := m.instances[instanceID]
+	if !found {
+		return ErrNotFound
+	}
+
+	resp, err := apiClient.DeleteVMWithResponse(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete vm: %w", err)
+	}
+
+	if err := validateStatus(resp.StatusCode()); err != nil {
+		log.V(1).Info("Failed to delete vm", "error", string(resp.Body))
+		return err
+	}
+	log.V(1).Info("Deleted machine")
 
 	return nil
 }

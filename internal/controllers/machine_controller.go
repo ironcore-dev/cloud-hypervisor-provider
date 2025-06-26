@@ -230,9 +230,10 @@ func getMachineNameFromNicID(id string) *string {
 }
 
 func (r *MachineReconciler) getMachineState(
-	ctx context.Context, machineID string,
+	ctx context.Context, machine *api.Machine,
 ) (client.VmInfoState, error) {
-	vm, err := r.vmm.GetVM(ctx, machineID)
+	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
+	vm, err := r.vmm.GetVM(ctx, apiSocket)
 	if err != nil {
 		if errors.Is(err, vmm.ErrVmNotCreated) || errors.Is(err, vmm.ErrNotFound) {
 			return client.Shutdown, nil
@@ -247,7 +248,7 @@ func (r *MachineReconciler) getMachineState(
 
 func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, machine *api.Machine) error {
 
-	state, err := r.getMachineState(ctx, machine.ID)
+	state, err := r.getMachineState(ctx, machine)
 	if err != nil {
 		return err
 	}
@@ -258,7 +259,7 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 		}
 	}
 
-	if err := r.vmm.KillVMM(ctx, machine.ID); !errors.Is(err, vmm.ErrNotFound) {
+	if err := r.vmm.Delete(ctx, machine.ID); !errors.Is(err, vmm.ErrNotFound) {
 		return fmt.Errorf("failed to kill VMM: %w", err)
 	}
 
@@ -337,11 +338,21 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return err
 	}
 
-	if err := r.vmm.InitVMM(ctx, machine.ID); err != nil {
-		return fmt.Errorf("failed to init vmm: %w", err)
+	if machine.Spec.ApiSocketPath == nil {
+		sock, err := r.vmm.GetFreeApiSocket()
+		if err != nil {
+			return fmt.Errorf("failed to get free api socket: %w", err)
+		}
+		machine.Spec.ApiSocketPath = sock
+		machine, err = r.machines.Update(ctx, machine)
+		if err != nil {
+			return fmt.Errorf("failed to update machine status: %w", err)
+		}
 	}
 
-	if err := r.vmm.Ping(ctx, machine.ID); err != nil {
+	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
+
+	if err := r.vmm.Ping(ctx, apiSocket); err != nil {
 		return fmt.Errorf("failed to ping vmm: %w", err)
 	}
 
@@ -409,7 +420,7 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return fmt.Errorf("failed to update machine status: %w", err)
 	}
 
-	vm, err := r.vmm.GetVM(ctx, machine.ID)
+	vm, err := r.vmm.GetVM(ctx, apiSocket)
 	if err != nil {
 		if !errors.Is(err, vmm.ErrVmNotCreated) {
 			return fmt.Errorf("failed to get vm: %w", err)
@@ -438,16 +449,20 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return nil
 	}
 
+	if platform := ptr.Deref(vm.Config.Platform, client.PlatformConfig{}); ptr.Deref(platform.Uuid, "") != machine.ID {
+		return fmt.Errorf("machine and vm IDs do not match")
+	}
+
 	switch machine.Spec.Power {
 	case api.PowerStatePowerOn:
 		if vm.State != client.Running {
-			if err := r.vmm.PowerOn(ctx, machine.ID); err != nil {
+			if err := r.vmm.PowerOn(ctx, apiSocket); err != nil {
 				return fmt.Errorf("failed to power on VM: %w", err)
 			}
 		}
 	case api.PowerStatePowerOff:
 		if vm.State == client.Running {
-			if err := r.vmm.PowerOff(ctx, machine.ID); err != nil {
+			if err := r.vmm.PowerOff(ctx, apiSocket); err != nil {
 				return fmt.Errorf("failed to power off VM: %w", err)
 			}
 		}
@@ -493,6 +508,7 @@ func (r *MachineReconciler) reconcileNics(
 	desiredNics map[string]*api.NetworkInterface,
 	currentDevices []client.DeviceConfig,
 ) error {
+	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
 	currentNICs := sets.New[string]()
 
 	for _, device := range currentDevices {
@@ -510,7 +526,7 @@ func (r *MachineReconciler) reconcileNics(
 			}
 
 			log.V(1).Info("Deleting NIC", "device", deviceID, "nicName", nicName)
-			if err := r.vmm.RemoveDevice(ctx, machine.ID, deviceID); err != nil {
+			if err := r.vmm.RemoveDevice(ctx, apiSocket, deviceID); err != nil {
 				return fmt.Errorf("failed to remove nic: %w", err)
 			}
 
@@ -531,7 +547,7 @@ func (r *MachineReconciler) reconcileNics(
 			}
 
 			log.V(1).Info("Adding NIC", "device", nicName, "nicName", nicName)
-			if err := r.vmm.AddNIC(ctx, machine.ID, nic); err != nil {
+			if err := r.vmm.AddNIC(ctx, apiSocket, nic); err != nil {
 				return fmt.Errorf("failed to add NIC %s: %w", nicName, err)
 			}
 		}

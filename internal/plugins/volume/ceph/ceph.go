@@ -6,9 +6,11 @@ package ceph
 import (
 	"context"
 	"fmt"
+	"github.com/digitalocean/go-qemu/qmp"
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
@@ -55,6 +57,29 @@ func DefaultProvider(log logr.Logger, paths host.Paths, bin string, detach bool)
 		bin:    bin,
 		detach: detach,
 	}
+}
+
+func QMPProvider(log logr.Logger, paths host.Paths) (Provider, error) {
+	monitor, err := qmp.NewSocketMonitor("unix", "/tmp/qsd.sock", 2*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to qmp monitor: %w", err)
+	}
+
+	go func() {
+		monitor.Connect()
+		defer monitor.Disconnect()
+
+		stream, _ := monitor.Events(context.TODO())
+		for e := range stream {
+			log.V(1).Info("EVENT: %s", e.Event)
+		}
+	}()
+
+	return &QMP{
+		log:     log,
+		paths:   paths,
+		monitor: monitor,
+	}, nil
 }
 
 type plugin struct {

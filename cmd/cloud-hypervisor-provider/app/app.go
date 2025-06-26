@@ -7,6 +7,7 @@ import (
 	"context"
 	goflag "flag"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"net"
 	"os"
 	"path/filepath"
@@ -56,7 +57,7 @@ type Options struct {
 
 	MachineClasses MachineClassOptions
 
-	CloudHypervisorBinPath      string
+	CloudHypervisorSocketsPath  string
 	CloudHypervisorFirmwarePath string
 
 	NicPlugin *options.Options
@@ -73,10 +74,10 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	)
 
 	fs.StringVar(
-		&o.CloudHypervisorBinPath,
-		"cloud-hypervisor-bin-path",
+		&o.CloudHypervisorSocketsPath,
+		"cloud-hypervisor-sockets-path",
 		"",
-		"Path to the cloud-hypervisor binary.",
+		"Path to the cloud-hypervisor management sockets.",
 	)
 
 	fs.StringVar(
@@ -175,15 +176,25 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
+	qmpProvider, err := ceph.QMPProvider(
+		log.WithName("ceph-volume-plugin"),
+		hostPaths,
+	)
+	if err != nil {
+		setupLog.Error(err, "failed to initialize qmp provider")
+		return err
+	}
+
 	pluginManager := volume.NewPluginManager()
 	if err := pluginManager.InitPlugins(hostPaths, []volume.Plugin{
-		ceph.NewPlugin(ceph.DefaultProvider(
-			log.WithName("ceph-volume-plugin"),
-			hostPaths,
-			//TODO flag
-			"/usr/bin/qemu-storage-daemon",
-			false,
-		)),
+		//ceph.NewPlugin(ceph.DefaultProvider(
+		//	log.WithName("ceph-volume-plugin"),
+		//	hostPaths,
+		//	//TODO flag
+		//	"/usr/bin/qemu-storage-daemon",
+		//	false,
+		//)),
+		ceph.NewPlugin(qmpProvider),
 	}); err != nil {
 		setupLog.Error(err, "failed to initialize plugins")
 		return err
@@ -243,15 +254,33 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
+	var socketsInUse []string
+	machines, err := machineStore.List(ctx)
+	if err != nil {
+		setupLog.Error(err, "failed to get initial machines")
+		return err
+	}
+	for _, machine := range machines {
+		if sock := ptr.Deref(machine.Spec.ApiSocketPath, ""); sock != "" {
+			socketsInUse = append(socketsInUse, sock)
+		}
+	}
+
+	virtualMachineManager, err := vmm.NewManager(
+		log.WithName("virtual-machine-manager"),
+		hostPaths,
+		vmm.ManagerOptions{
+			CHSocketsPath:     opts.CloudHypervisorSocketsPath,
+			FirmwarePath:      opts.CloudHypervisorFirmwarePath,
+			ReservedInstances: socketsInUse,
+		},
+	)
+	if err != nil {
+		setupLog.Error(err, "failed to initialize virtual-machine-manager")
+		return err
+	}
+
 	eventRecorder := recorder.NewEventStore(log, recorder.EventStoreOptions{})
-
-	virtualMachineManager := vmm.NewManager(hostPaths, vmm.ManagerOptions{
-		CloudHypervisorBin: opts.CloudHypervisorBinPath,
-		Logger:             log.WithName("virtual-machine-manager"),
-		DetachVms:          opts.DetachVms,
-		FirmwarePath:       opts.CloudHypervisorFirmwarePath,
-	})
-
 	machineReconciler, err := controllers.NewMachineReconciler(
 		log.WithName("machine-reconciler"),
 		machineStore,
