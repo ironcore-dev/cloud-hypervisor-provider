@@ -6,9 +6,11 @@ package server
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
+	"k8s.io/utils/ptr"
 )
 
 func (s *Server) DetachVolume(ctx context.Context, req *iri.DetachVolumeRequest) (*iri.DetachVolumeResponse, error) {
@@ -27,11 +29,11 @@ func (s *Server) DetachVolume(ctx context.Context, req *iri.DetachVolumeRequest)
 	var updatedVolumes []*api.VolumeSpec
 	found := false
 	for _, volume := range apiMachine.Spec.Volumes {
-		if volume.Name != req.Name {
-			updatedVolumes = append(updatedVolumes, volume)
-		} else {
+		if volume.Name == req.Name {
+			volume.DeletedAt = ptr.To(time.Now())
 			found = true
 		}
+		updatedVolumes = append(updatedVolumes, volume)
 	}
 
 	if !found {

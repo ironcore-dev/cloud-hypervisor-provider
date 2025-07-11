@@ -188,6 +188,8 @@ func (s *Server) getIRIVolumeState(state api.VolumeState) (iri.VolumeState, erro
 	//	TODO
 	case "":
 		fallthrough
+	case api.VolumeStatePrepared:
+		fallthrough
 	case api.VolumeStatePending:
 		return iri.VolumeState_VOLUME_PENDING, nil
 	default:

@@ -26,8 +26,6 @@ type Plugin interface {
 
 	Apply(ctx context.Context, spec *api.VolumeSpec, machineID string) (*api.VolumeStatus, error)
 	Delete(ctx context.Context, computeVolumeName string, machineID string) error
-
-	GetSize(ctx context.Context, spec *api.VolumeSpec) (int64, error)
 }
 
 type PluginManager struct {

@@ -62,7 +62,7 @@ func (p *plugin) diskFilename(computeVolumeName string, machineID string) string
 	)
 }
 
-func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machineID string) (*api.VolumeStatus, error) {
+func (p *plugin) Apply(_ context.Context, spec *api.VolumeSpec, machineID string) (*api.VolumeStatus, error) {
 	volumeDir := p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), spec.Name)
 	if err := os.MkdirAll(volumeDir, os.ModePerm); err != nil {
 		return nil, err
@@ -96,19 +96,13 @@ func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machineID stri
 		Type:   api.VolumeFileType,
 		Path:   diskFilename,
 		Handle: handle,
-		//TODO
-		State: "",
-		Size:  size,
+		State:  api.VolumeStatePrepared,
+		Size:   size,
 	}, nil
 }
 
-func (p *plugin) Delete(ctx context.Context, computeVolumeName string, machineID string) error {
+func (p *plugin) Delete(_ context.Context, computeVolumeName string, machineID string) error {
 	return os.RemoveAll(p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), computeVolumeName))
-}
-
-func (p *plugin) GetSize(ctx context.Context, spec *api.VolumeSpec) (int64, error) {
-	// Currently Ironcore does not support resize of EmptyDisk
-	return spec.EmptyDisk.Size, nil
 }
 
 // randomHex generates random hexadecimal digits of the length n*2.

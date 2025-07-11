@@ -62,6 +62,7 @@ type VolumeSpec struct {
 	Device     string            `json:"device"`
 	EmptyDisk  *EmptyDiskSpec    `json:"emptyDisk,omitempty"`
 	Connection *VolumeConnection `json:"cephDisk,omitempty"`
+	DeletedAt  *time.Time        `json:"deletedAt,omitempty"`
 }
 
 type VolumeStatus struct {
@@ -89,6 +90,7 @@ type VolumeState string
 
 const (
 	VolumeStatePending  VolumeState = "Pending"
+	VolumeStatePrepared VolumeState = "Prepared"
 	VolumeStateAttached VolumeState = "Attached"
 )
 

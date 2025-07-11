@@ -8,8 +8,6 @@ import (
 	b64 "encoding/base64"
 	"errors"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +17,8 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	utilssync "github.com/ironcore-dev/provider-utils/storeutils/sync"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
 )
 
 type ManagerOptions struct {
@@ -209,6 +209,10 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[s
 	}
 
 	for _, vol := range machine.Status.VolumeStatus {
+		if vol.State != api.VolumeStatePrepared {
+			continue
+		}
+
 		disk := client.DiskConfig{
 			Id: ptr.To(vol.Handle),
 		}
@@ -334,6 +338,48 @@ func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.Networ
 		return err
 	}
 	log.V(1).Info("Added device", "nicName", nicName)
+
+	return nil
+}
+
+func (m *Manager) AddDisk(ctx context.Context, instanceID string, volume *api.VolumeStatus) error {
+	m.idMu.Lock(instanceID)
+	defer m.idMu.Unlock(instanceID)
+
+	log := m.log.WithValues("instanceID", instanceID)
+
+	if volume.State != api.VolumeStatePrepared {
+		return fmt.Errorf("volume %s is not prepared", volume.Handle)
+	}
+
+	apiClient, found := m.instances[instanceID]
+	if !found {
+		return ErrNotFound
+	}
+
+	disk := client.DiskConfig{
+		Id: ptr.To(volume.Handle),
+	}
+
+	switch volume.Type {
+	case api.VolumeSocketType:
+		disk.VhostUser = ptr.To(true)
+		disk.VhostSocket = ptr.To(volume.Path)
+		disk.Readonly = ptr.To(false)
+	case api.VolumeFileType:
+		disk.Path = ptr.To(volume.Path)
+	}
+
+	resp, err := apiClient.PutVmAddDiskWithResponse(ctx, disk)
+	if err != nil {
+		return fmt.Errorf("failed to add device: %w", err)
+	}
+
+	if err := validateStatus(resp.StatusCode()); err != nil {
+		log.V(1).Info("Failed to add disk", "error", string(resp.Body))
+		return err
+	}
+	log.V(1).Info("Added device", "diskName", volume.Handle)
 
 	return nil
 }

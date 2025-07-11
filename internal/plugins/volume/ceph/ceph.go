@@ -6,12 +6,12 @@ package ceph
 import (
 	"context"
 	"fmt"
-	"github.com/digitalocean/go-qemu/qmp"
 	"net"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/digitalocean/go-qemu/qmp"
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
@@ -48,30 +48,23 @@ type Provider interface {
 	Unmount(ctx context.Context, machineID string, volumeID string) error
 }
 
-//TODO clean this up later
-
-func DefaultProvider(log logr.Logger, paths host.Paths, bin string, detach bool) Provider {
-	return &QemuStorage{
-		log:    log,
-		paths:  paths,
-		bin:    bin,
-		detach: detach,
-	}
-}
-
-func QMPProvider(log logr.Logger, paths host.Paths) (Provider, error) {
-	monitor, err := qmp.NewSocketMonitor("unix", "/tmp/qsd.sock", 2*time.Second)
+func QMPProvider(ctx context.Context, log logr.Logger, paths host.Paths, socket string) (Provider, error) {
+	monitor, err := qmp.NewSocketMonitor("unix", socket, 2*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to qmp monitor: %w", err)
 	}
 
 	go func() {
-		monitor.Connect()
-		defer monitor.Disconnect()
+		// TODO
+		_ = monitor.Connect()
+		defer func() {
+			// TODO
+			_ = monitor.Disconnect()
+		}()
 
-		stream, _ := monitor.Events(context.TODO())
+		stream, _ := monitor.Events(ctx)
 		for e := range stream {
-			log.V(1).Info("EVENT: %s", e.Event)
+			log.V(1).Info(fmt.Sprintf("EVENT: %s", e.Event))
 		}
 	}()
 
@@ -192,19 +185,12 @@ func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machineID stri
 		return nil, fmt.Errorf("failed to mount volume: %w", err)
 	}
 
-	volumeSize, err := p.GetSize(ctx, spec)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get volume size: %w", err)
-	}
-
 	return &api.VolumeStatus{
 		Name:   spec.Name,
 		Type:   api.VolumeSocketType,
 		Path:   path,
 		Handle: volumeData.handle,
-		//TODO
-		State: "",
-		Size:  volumeSize,
+		State:  api.VolumeStatePrepared,
 	}, nil
 }
 
@@ -255,9 +241,4 @@ func (p *plugin) Delete(ctx context.Context, computeVolumeName string, machineID
 	}
 
 	return os.RemoveAll(p.host.MachineVolumeDir(machineID, cephDriverName, computeVolumeName))
-}
-
-func (p *plugin) GetSize(ctx context.Context, spec *api.VolumeSpec) (int64, error) {
-	//TODO implement me
-	return 0, nil
 }

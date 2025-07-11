@@ -63,12 +63,12 @@ var _ = BeforeEach(func() {
 	Expect(os.Chmod(tempDir, 0730)).Should(Succeed())
 
 	By("preparing the host dirs")
-	providerHost, err := host.PathsAt(tempDir)
+	_, err := host.PathsAt(tempDir)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("setting up the machine store")
 	machineStore, err := hostutils.NewStore[*api.Machine](hostutils.Options[*api.Machine]{
-		Dir:            providerHost.MachineStoreDir(),
+		Dir:            filepath.Join(tempDir, "machines"),
 		NewFunc:        func() *api.Machine { return &api.Machine{} },
 		CreateStrategy: strategy.MachineStrategy,
 	})

@@ -246,6 +246,18 @@ func (r *MachineReconciler) getMachineState(
 	return client.Shutdown, nil
 }
 
+func getVolumeStatus(volumes []api.VolumeStatus, name string) api.VolumeStatus {
+	for _, vol := range volumes {
+		if vol.Name == name {
+			return vol
+		}
+	}
+	return api.VolumeStatus{
+		Name:  name,
+		State: api.VolumeStatePending,
+	}
+}
+
 func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, machine *api.Machine) error {
 
 	state, err := r.getMachineState(ctx, machine)
@@ -294,6 +306,113 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 	}
 
 	log.V(1).Info("Removed Finalizer. Deletion completed")
+
+	return nil
+}
+
+func (r *MachineReconciler) reconcileVolumes(ctx context.Context, log logr.Logger, machine *api.Machine) error {
+	var updatedVolumeStatus []api.VolumeStatus
+	var updatedVolumeSpec []*api.VolumeSpec
+
+	for _, vol := range machine.Spec.Volumes {
+
+		plugin, err := r.VolumePluginManager.FindPluginBySpec(vol)
+		if err != nil {
+			return fmt.Errorf("failed to find plugin: %w", err)
+		}
+
+		log.V(2).Info("Reconcile volume", "name", vol.Name, "plugin", plugin.Name())
+
+		status := getVolumeStatus(machine.Status.VolumeStatus, vol.Name)
+		if vol.DeletedAt != nil {
+			if status.State != api.VolumeStateAttached {
+				log.V(2).Info("Delete not attached volume", "name", vol.Name)
+				if err := plugin.Delete(ctx, vol.Connection.Handle, machine.ID); err != nil {
+					return fmt.Errorf("failed to delete volume %s: %w", vol.Name, err)
+				}
+				continue
+			}
+			log.V(2).Info("Volume attached but deletion timestamp set", "name", vol.Name)
+		}
+
+		appliedVolume, err := plugin.Apply(ctx, vol, machine.ID)
+		if err != nil {
+			return fmt.Errorf("failed to apply volume: %w", err)
+		}
+		if status.State == api.VolumeStateAttached {
+			appliedVolume.State = status.State
+		}
+		updatedVolumeSpec = append(updatedVolumeSpec, vol)
+		updatedVolumeStatus = append(updatedVolumeStatus, *appliedVolume)
+		log.V(2).Info("Volume reconciled", "name", vol.Name)
+	}
+
+	machine.Spec.Volumes = updatedVolumeSpec
+	machine.Status.VolumeStatus = updatedVolumeStatus
+
+	if _, err := r.machines.Update(ctx, machine); err != nil {
+		return fmt.Errorf("failed to update machine status: %w", err)
+	}
+
+	return nil
+}
+
+func (r *MachineReconciler) attachDetachDisks(
+	ctx context.Context,
+	log logr.Logger,
+	machine *api.Machine,
+	vm client.VmConfig,
+) error {
+	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
+	currentDevices := sets.New[string]()
+
+	for _, dev := range ptr.Deref(vm.Disks, []client.DiskConfig{}) {
+		id := dev.Id
+		if id == nil {
+			continue
+		}
+		currentDevices.Insert(ptr.Deref(id, ""))
+	}
+
+	var updatedVolumeStatus []api.VolumeStatus
+	for _, vol := range machine.Spec.Volumes {
+		status := getVolumeStatus(machine.Status.VolumeStatus, vol.Name)
+
+		if vol.DeletedAt == nil {
+			if !currentDevices.Has(status.Handle) {
+				if status.State != api.VolumeStatePrepared {
+					log.V(1).Info("Skip disk attachment: not prepared", "disk", vol.Name)
+					continue
+				}
+				if err := r.vmm.AddDisk(ctx, apiSocket, ptr.To(status)); err != nil {
+					return fmt.Errorf("failed to add disk %s: %w", vol.Name, err)
+				}
+
+				log.V(1).Info("Added disk", "disk", vol.Name)
+			}
+			status.State = api.VolumeStateAttached
+			updatedVolumeStatus = append(updatedVolumeStatus, status)
+		} else {
+			if currentDevices.Has(status.Handle) {
+				if err := r.vmm.RemoveDevice(ctx, apiSocket, status.Handle); err != nil {
+					return fmt.Errorf("failed to remove disk %s: %w", vol.Name, err)
+				}
+				log.V(1).Info("Removed disk", "disk", vol.Name)
+
+				updatedVolumeStatus = append(updatedVolumeStatus, status)
+				continue
+			}
+
+			log.V(1).Info("Disk not present: Update status", "disk", vol.Name)
+			status.State = api.VolumeStatePrepared
+			updatedVolumeStatus = append(updatedVolumeStatus, status)
+		}
+	}
+
+	machine.Status.VolumeStatus = updatedVolumeStatus
+	if _, err := r.machines.Update(ctx, machine); err != nil {
+		return fmt.Errorf("failed to update machine status: %w", err)
+	}
 
 	return nil
 }
@@ -398,26 +517,8 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		nics[networkInterface.Name] = nic
 	}
 
-	var updatedVolumeStatus []api.VolumeStatus
-	for _, vol := range machine.Spec.Volumes {
-		plugin, err := r.VolumePluginManager.FindPluginBySpec(vol)
-		if err != nil {
-			return fmt.Errorf("failed to find plugin: %w", err)
-		}
-
-		appliedVolume, err := plugin.Apply(ctx, vol, machine.ID)
-		if err != nil {
-			return fmt.Errorf("failed to apply volume: %w", err)
-		}
-
-		//TODO handle later detach volume
-		updatedVolumeStatus = append(updatedVolumeStatus, *appliedVolume)
-	}
-	machine.Status.VolumeStatus = updatedVolumeStatus
-
-	machine, err = r.machines.Update(ctx, machine)
-	if err != nil {
-		return fmt.Errorf("failed to update machine status: %w", err)
+	if err := r.reconcileVolumes(ctx, log, machine); err != nil {
+		return fmt.Errorf("failed to reconcile volumes: %w", err)
 	}
 
 	vm, err := r.vmm.GetVM(ctx, apiSocket)
@@ -470,6 +571,10 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 
 	if err := r.reconcileNics(ctx, log, machine, nics, ptr.Deref(vm.Config.Devices, nil)); err != nil {
 		return fmt.Errorf("failed to reconcile nics: %w", err)
+	}
+
+	if err := r.attachDetachDisks(ctx, log, machine, vm.Config); err != nil {
+		return fmt.Errorf("failed to attach detach disks: %w", err)
 	}
 
 	switch machine.Spec.Power {
