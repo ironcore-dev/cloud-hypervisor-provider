@@ -4,6 +4,7 @@
 package server_test
 
 import (
+	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
 	irimeta "github.com/ironcore-dev/ironcore/iri/apis/meta/v1alpha1"
 	machinepoolletv1alpha1 "github.com/ironcore-dev/ironcore/poollet/machinepoollet/api/v1alpha1"
@@ -46,22 +47,18 @@ var _ = Describe("DetachVolume", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(createResp).NotTo(BeNil())
 
-		By("attaching a volume")
+		By("detaching a volume")
+		diskName := "disk-2"
 		machineID := createResp.Machine.Metadata.Id
 		Expect(machineClient.DetachVolume(ctx, &iri.DetachVolumeRequest{
 			MachineId: machineID,
-			Name:      "disk-2",
+			Name:      diskName,
 		})).Error().NotTo(HaveOccurred())
 
-		updatedMachine, err := machineClient.ListMachines(ctx, &iri.ListMachinesRequest{
-			Filter: &iri.MachineFilter{
-				Id: machineID,
-			},
-		})
+		machine, err := machineStore.Get(ctx, machineID)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(updatedMachine.Machines).To(HaveLen(1))
-		Expect(updatedMachine.Machines[0].Spec.Volumes).To(HaveLen(1))
-		Expect(updatedMachine.Machines[0].Spec.Volumes[0].Name).To(Equal("disk-1"))
-
+		Expect(machine.Spec.Volumes).To(ContainElement(Satisfy(func(v *api.VolumeSpec) bool {
+			return v.DeletedAt != nil && v.Name == diskName
+		})))
 	})
 })
