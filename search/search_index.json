@@ -1,0 +1,1 @@
+{"config":{"lang":["en"],"separator":"[\\s\\-]+","pipeline":["stopWordFilter"]},"docs":[{"location":"","title":"FeOS Provider Documentation","text":"<p>This page contains the documentation of the feos-provider project which is part  of the ironcore-dev organization.</p>"}]}
