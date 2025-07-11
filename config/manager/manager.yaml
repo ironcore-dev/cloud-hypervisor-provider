@@ -137,8 +137,10 @@ spec:
           volumeMounts:
             - name: var-run
               mountPath: /var/run
-            - mountPath: /var/lib/ch-provider
-              name: cloud-hypervisor-provider
+            - name: var-run-chp
+              mountPath: /var/run/chp
+            - name: cloud-hypervisor-provider
+              mountPath: /var/lib/chp
             - name: kvm
               mountPath: /dev/kvm
             - name: vhost
@@ -146,6 +148,10 @@ spec:
             - mountPath: /dev/vfio
               name: vfio
       volumes:
+        - name: var-run-chp
+          hostPath:
+            path: /var/run/chp
+            type: DirectoryOrCreate
         - name: var-run
           emptyDir: { }
         - name: etc
@@ -158,7 +164,7 @@ spec:
             type: Directory
         - name: cloud-hypervisor-provider
           hostPath:
-            path: /var/lib/ch-provider
+            path: /var/lib/chp
             type: DirectoryOrCreate
         - name: kvm
           hostPath:
