@@ -4,6 +4,7 @@
 package server_test
 
 import (
+	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
 	irimeta "github.com/ironcore-dev/ironcore/iri/apis/meta/v1alpha1"
 	machinepoolletv1alpha1 "github.com/ironcore-dev/ironcore/poollet/machinepoollet/api/v1alpha1"
@@ -41,20 +42,17 @@ var _ = Describe("DetachNetworkInterface", func() {
 		Expect(createResp).NotTo(BeNil())
 
 		By("detaching the network interface")
+		nicName := "nic-1"
 		machineID := createResp.Machine.Metadata.Id
 		Expect(machineClient.DetachNetworkInterface(ctx, &iri.DetachNetworkInterfaceRequest{
 			MachineId: machineID,
-			Name:      "nic-1",
+			Name:      nicName,
 		})).Error().NotTo(HaveOccurred())
 
-		updatedMachine, err := machineClient.ListMachines(ctx, &iri.ListMachinesRequest{
-			Filter: &iri.MachineFilter{
-				Id: machineID,
-			},
-		})
+		machine, err := machineStore.Get(ctx, machineID)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(updatedMachine.Machines).To(HaveLen(1))
-		Expect(updatedMachine.Machines[0].Spec.NetworkInterfaces).To(BeEmpty())
-
+		Expect(machine.Spec.NetworkInterfaces).To(ContainElement(Satisfy(func(v *api.NetworkInterfaceSpec) bool {
+			return v.DeletedAt != nil && v.Name == nicName
+		})))
 	})
 })
