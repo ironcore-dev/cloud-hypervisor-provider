@@ -108,9 +108,11 @@ func (p *Plugin) Apply(
 	spec *api.NetworkInterfaceSpec,
 	machineID string,
 ) (*api.NetworkInterfaceStatus, error) {
-	log := ctrl.LoggerFrom(ctx)
+	log := ctrl.LoggerFrom(ctx).WithValues("nicName", spec.Name)
 
-	log.V(1).Info("Writing network interface dir")
+	log.V(1).Info("Reconciling nic")
+
+	log.V(2).Info("Writing network interface dir")
 	if err := os.MkdirAll(p.host.MachineNetworkInterfaceDir(machineID, spec.Name), os.ModePerm); err != nil {
 		return nil, err
 	}
@@ -120,7 +122,7 @@ func (p *Plugin) Apply(
 		return nil, fmt.Errorf("error parsing ApiNet NetworkID %s: %w", spec.NetworkId, err)
 	}
 
-	log.V(1).Info("Writing APINet network interface config file")
+	log.V(2).Info("Writing APINet network interface config file")
 	if err := p.writeAPINetNetworkInterfaceConfig(machineID, spec.Name, &apiNetNetworkInterfaceConfig{
 		Namespace: apinetNamespace,
 	}); err != nil {
@@ -147,7 +149,7 @@ func (p *Plugin) Apply(
 		},
 	}
 
-	log.V(1).Info("Applying apinet nic")
+	log.V(2).Info("Applying apinet nic")
 	if err := p.apinetClient.Patch(ctx, apinetNic, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
 		return nil, fmt.Errorf("error applying apinet network interface: %w", err)
 	}
@@ -172,11 +174,11 @@ func (p *Plugin) Apply(
 		}, nil
 	}
 
-	log.V(1).Info("Waiting for apinet network interface to become ready")
+	log.V(2).Info("Waiting for apinet network interface to become ready")
 	apinetNicKey := client.ObjectKeyFromObject(apinetNic)
 	if err := wait.PollUntilContextTimeout(
 		ctx,
-		50*time.Millisecond,
+		500*time.Millisecond,
 		5*time.Second,
 		true,
 		func(ctx context.Context) (done bool, err error) {
@@ -243,14 +245,14 @@ func getDeviceInfo(status *apinetv1alpha1.NetworkInterfaceStatus) (string, api.N
 func (p *Plugin) Delete(ctx context.Context, computeNicName string, machineID string) error {
 	log := ctrl.LoggerFrom(ctx)
 
-	log.V(1).Info("Reading APINet network interface config file")
+	log.V(2).Info("Reading APINet network interface config file")
 	cfg, err := p.readAPINetNetworkInterfaceConfig(machineID, computeNicName)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("error reading namespace file: %w", err)
 		}
 
-		log.V(1).Info("No namespace file found, deleting network interface dir")
+		log.V(2).Info("No namespace file found, deleting network interface dir")
 		return os.RemoveAll(p.host.MachineNetworkInterfaceDir(machineID, computeNicName))
 	}
 
@@ -276,7 +278,7 @@ func (p *Plugin) Delete(ctx context.Context, computeNicName string, machineID st
 
 	log.V(1).Info("Waiting until apinet network interface is gone")
 	if err := wait.PollUntilContextTimeout(
-		ctx, 50*time.Millisecond,
+		ctx, 500*time.Millisecond,
 		10*time.Second,
 		true,
 		func(ctx context.Context) (done bool, err error) {

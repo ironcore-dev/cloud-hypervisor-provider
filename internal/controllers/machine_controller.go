@@ -236,7 +236,7 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 		return err
 	}
 	if state == client.Running {
-		log.V(1).Info("Power off machine")
+		log.V(1).Info("Power machine off")
 		if err := r.vmm.PowerOff(ctx, machine.ID); !errors.Is(err, vmm.ErrNotFound) {
 			return fmt.Errorf("failed to power off machine: %w", err)
 		}
@@ -246,6 +246,7 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 		return fmt.Errorf("failed to kill VMM: %w", err)
 	}
 
+	log.V(1).Info("Delete volumes")
 	for _, vol := range machine.Spec.Volumes {
 		plugin, err := r.VolumePluginManager.FindPluginBySpec(vol)
 		if err != nil {
@@ -258,6 +259,7 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 		}
 	}
 
+	log.V(1).Info("Delete NICs")
 	for _, nic := range machine.Spec.NetworkInterfaces {
 		log.V(2).Info("Delete NIC", "name", nic.Name)
 		if err := r.networkInterfacePlugin.Delete(ctx, nic.Name, machine.ID); err != nil {
@@ -360,7 +362,7 @@ func (r *MachineReconciler) reconcileNics(ctx context.Context, log logr.Logger, 
 		if status.State == api.NetworkInterfaceStateAttached {
 			appliedNIC.State = status.State
 		}
-		updatedNICSpec = append(updatedNICSpec, nil)
+		updatedNICSpec = append(updatedNICSpec, nic)
 		updatedNICStatus = append(updatedNICStatus, *appliedNIC)
 		log.V(2).Info("NIC reconciled", "name", nic.Name)
 	}
@@ -481,6 +483,7 @@ func (r *MachineReconciler) attachDetachNICs(
 				log.V(1).Info("Removed NIC", "nic", status.Name)
 
 				updatedNICStatus = append(updatedNICStatus, status)
+				r.queue.Add(machine.ID)
 				continue
 			}
 
@@ -502,6 +505,7 @@ func (r *MachineReconciler) attachDetachNICs(
 func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) error {
 	log := logr.FromContextOrDiscard(ctx)
 
+	log.V(1).Info("Reconciling machine", "id", id)
 	log.V(2).Info("Getting machine from store", "id", id)
 	machine, err := r.machines.Get(ctx, id)
 	if err != nil {
@@ -528,11 +532,11 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return nil
 	}
 
-	log.V(1).Info("Making machine directories")
+	log.V(2).Info("Making machine directories")
 	if err := host.MakeMachineDirs(r.paths, machine.ID); err != nil {
 		return fmt.Errorf("error making machine directories: %w", err)
 	}
-	log.V(1).Info("Successfully made machine directories")
+	log.V(2).Info("Successfully made machine directories")
 
 	if requeue, err := r.reconcileImage(ctx, log, machine); err != nil || requeue {
 		return err
@@ -621,7 +625,7 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return fmt.Errorf("failed to update machine status: %w", err)
 	}
 
-	log.V(1).Info("Successfully reconciled VM", "machine", machine.ID)
+	log.V(1).Info("Reconciled machine successfully ", "machine", machine.ID)
 	return nil
 }
 
@@ -646,7 +650,7 @@ func (r *MachineReconciler) reconcileImage(
 		return false, fmt.Errorf("failed to get image from cache: %w", err)
 	}
 
-	log.V(1).Info("Image in cache", "image", image)
+	log.V(2).Info("Image in cache", "image", image)
 	rootFSFile := r.paths.MachineRootFSFile(machine.ID)
 	ok, err := osutils.RegularFileExists(rootFSFile)
 	if err != nil {

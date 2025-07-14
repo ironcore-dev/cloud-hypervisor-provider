@@ -315,7 +315,7 @@ func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.Networ
 
 	log := m.log.WithValues("instanceID", instanceID)
 
-	if nic.State != api.NetworkInterfaceStateAttached {
+	if nic.State != api.NetworkInterfaceStatePrepared {
 		return fmt.Errorf("nic %s is not attached", nic.Name)
 	}
 
