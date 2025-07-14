@@ -24,13 +24,13 @@ RUN mkdir bin
 # Build the cloud-hypervisor-provider
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GO111MODULE=on  \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH  \
     go build -ldflags="-s -w" -a -o bin/cloud-hypervisor-provider ./cmd/cloud-hypervisor-provider/main.go
 
 # Install irictl-machine
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GO111MODULE=on \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go install github.com/ironcore-dev/ironcore/irictl-machine/cmd/irictl-machine@main
 
 # Ensure the binary is in a common location
@@ -45,14 +45,7 @@ RUN if [ "$TARGETARCH" = "$BUILDARCH" ]; then \
 FROM debian:bullseye-slim AS cloud-hypervisor-provider
 WORKDIR /
 
-RUN apt-get update && apt-get install -y  \
-    ca-certificates  \
-    qemu-system-common \
-    qemu-block-extra \
-    ceph-common \
-    librados2 \
-    librbd1 \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy the binaries from the builder
 COPY --from=builder /workspace/bin/cloud-hypervisor-provider .
@@ -66,7 +59,7 @@ FROM builder AS prepare-host-builder
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GO111MODULE=on go build -ldflags="-s -w" -a -o bin/prepare-host \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-s -w" -a -o bin/prepare-host \
     ./cmd/prepare-host
 
 
