@@ -6,9 +6,11 @@ package server
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
+	"k8s.io/utils/ptr"
 )
 
 func (s *Server) DetachNetworkInterface(
@@ -27,14 +29,14 @@ func (s *Server) DetachNetworkInterface(
 		return nil, fmt.Errorf("failed to get machine: %w", err)
 	}
 
-	var updatedNICS []*api.MachineNetworkInterfaceSpec
+	var updatedNICS []*api.NetworkInterfaceSpec
 	found := false
 	for _, nic := range apiMachine.Spec.NetworkInterfaces {
-		if nic.Name != req.Name {
-			updatedNICS = append(updatedNICS, nic)
-		} else {
+		if nic.Name == req.Name {
+			nic.DeletedAt = ptr.To(time.Now())
 			found = true
 		}
+		updatedNICS = append(updatedNICS, nic)
 	}
 
 	if !found {

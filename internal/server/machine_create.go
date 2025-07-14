@@ -50,9 +50,9 @@ func (s *Server) createMachineFromIRIMachine(
 		volumes = append(volumes, volumeSpec)
 	}
 
-	var networkInterfaces []*api.MachineNetworkInterfaceSpec
+	var networkInterfaces []*api.NetworkInterfaceSpec
 	for _, iriNetworkInterface := range iriMachine.Spec.NetworkInterfaces {
-		networkInterfaceSpec := &api.MachineNetworkInterfaceSpec{
+		networkInterfaceSpec := &api.NetworkInterfaceSpec{
 			Name:       iriNetworkInterface.Name,
 			NetworkId:  iriNetworkInterface.NetworkId,
 			Ips:        iriNetworkInterface.Ips,

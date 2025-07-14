@@ -17,14 +17,3 @@ type Plugin interface {
 	Apply(ctx context.Context, spec *api.NetworkInterfaceSpec, machineID string) (*api.NetworkInterfaceStatus, error)
 	Delete(ctx context.Context, computeNicName string, machineID string) error
 }
-
-type HostDevice struct {
-	Domain   uint
-	Bus      uint
-	Slot     uint
-	Function uint
-}
-
-type Direct struct {
-	Dev string
-}

@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
@@ -38,11 +38,10 @@ func NewManager(log logr.Logger, paths host.Paths, opts ManagerOptions) (*Manage
 	m := &Manager{
 		idMu:         utilssync.NewMutexMap[string](),
 		instances:    make(map[string]*client.ClientWithResponses),
-		active:       make(map[string]bool),
 		paths:        paths,
 		firmwarePath: opts.FirmwarePath,
 		log:          log,
-		nextFree:     make(chan string, len(entries)),
+		free:         sets.New[string](),
 	}
 	reserved := sets.NewString(opts.ReservedInstances...)
 	for _, v := range entries {
@@ -63,11 +62,10 @@ func NewManager(log logr.Logger, paths host.Paths, opts ManagerOptions) (*Manage
 
 		initLog.V(2).Info("Created cloud-hypervisor client", "socketPath", socketPath)
 		m.instances[socketPath] = apiClient
-		m.active[socketPath] = true
 
 		if _, err := m.GetVM(context.TODO(), socketPath); errors.Is(err, ErrVmNotCreated) {
 			if !reserved.Has(socketPath) {
-				m.nextFree <- socketPath
+				m.free.Insert(socketPath)
 			} else {
 				initLog.V(2).Info("Socket blocked and skipped", "socketPath", socketPath)
 			}
@@ -84,9 +82,9 @@ type Manager struct {
 
 	idMu      *utilssync.MutexMap[string]
 	instances map[string]*client.ClientWithResponses
-	active    map[string]bool
 
-	nextFree chan string
+	free   sets.Set[string]
+	freeMu sync.Mutex
 
 	paths        host.Paths
 	firmwarePath string
@@ -134,12 +132,22 @@ func (m *Manager) ping(ctx context.Context, instanceID string) error {
 }
 
 func (m *Manager) GetFreeApiSocket() (*string, error) {
-	select {
-	case socket := <-m.nextFree:
-		return ptr.To(socket), nil
-	default:
+	m.freeMu.Lock()
+	defer m.freeMu.Unlock()
+
+	socket, empty := m.free.PopAny()
+	if empty {
 		return nil, fmt.Errorf("no free socket available")
 	}
+
+	return ptr.To(socket), nil
+}
+
+func (m *Manager) FreeApiSocket(socket string) {
+	m.freeMu.Lock()
+	defer m.freeMu.Unlock()
+
+	m.free.Insert(socket)
 }
 
 func (m *Manager) GetVM(ctx context.Context, instanceID string) (*client.VmInfo, error) {
@@ -170,7 +178,7 @@ func (m *Manager) GetVM(ctx context.Context, instanceID string) (*client.VmInfo,
 	return resp.JSON200, nil
 }
 
-func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[string]*api.NetworkInterface) error {
+func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 	instanceID := ptr.Deref(machine.Spec.ApiSocketPath, "")
 	m.idMu.Lock(instanceID)
 	defer m.idMu.Unlock(instanceID)
@@ -230,18 +238,14 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine, nics map[s
 	}
 
 	var dev []client.DeviceConfig
-	for _, nic := range nics {
-		if nic == nil {
-			continue
-		}
-
-		if nic.Status.State != api.NetworkInterfaceStateAttached {
-			return fmt.Errorf("nic %s is not attached", nic.ID)
+	for _, nic := range machine.Status.NetworkInterfaceStatus {
+		if nic.State != api.NetworkInterfaceStatePrepared {
+			return fmt.Errorf("nic %s is not attached", nic.Name)
 		}
 
 		dev = append(dev, client.DeviceConfig{
-			Id:   ptr.To(nic.ID),
-			Path: nic.Status.Path,
+			Id:   ptr.To(getNicID(nic.Name)),
+			Path: nic.Path,
 		})
 	}
 
@@ -305,19 +309,14 @@ func (m *Manager) RemoveDevice(ctx context.Context, instanceID string, deviceID 
 	return nil
 }
 
-func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.NetworkInterface) error {
+func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.NetworkInterfaceStatus) error {
 	m.idMu.Lock(instanceID)
 	defer m.idMu.Unlock(instanceID)
 
 	log := m.log.WithValues("instanceID", instanceID)
 
-	if nic.Status.State != api.NetworkInterfaceStateAttached {
-		return fmt.Errorf("nic %s is not attached", nic.ID)
-	}
-
-	nicName, err := getNicName(nic.ID)
-	if err != nil {
-		return err
+	if nic.State != api.NetworkInterfaceStateAttached {
+		return fmt.Errorf("nic %s is not attached", nic.Name)
 	}
 
 	apiClient, found := m.instances[instanceID]
@@ -326,8 +325,8 @@ func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.Networ
 	}
 
 	resp, err := apiClient.PutVmAddDeviceWithResponse(ctx, client.DeviceConfig{
-		Id:   ptr.To(nicName),
-		Path: nic.Status.Path,
+		Id:   ptr.To(getNicID(nic.Name)),
+		Path: nic.Path,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to remove device: %w", err)
@@ -337,9 +336,13 @@ func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.Networ
 		log.V(1).Info("Failed to add nic", "error", string(resp.Body))
 		return err
 	}
-	log.V(1).Info("Added device", "nicName", nicName)
+	log.V(1).Info("Added device", "name", nic.Name)
 
 	return nil
+}
+
+func (m *Manager) RemoveNIC(ctx context.Context, instanceID string, nicName string) error {
+	return m.RemoveDevice(ctx, instanceID, getNicID(nicName))
 }
 
 func (m *Manager) AddDisk(ctx context.Context, instanceID string, volume *api.VolumeStatus) error {
@@ -459,15 +462,6 @@ func (m *Manager) Delete(ctx context.Context, instanceID string) error {
 	return nil
 }
 
-func getNicName(id string) (string, error) {
-	parts := strings.Split(id, "--")
-	if len(parts) != 3 {
-		return "", errors.New("invalid nic name")
-	}
-
-	if parts[0] != "NIC" {
-		return "", errors.New("invalid nic name")
-	}
-
-	return parts[2], nil
+func getNicID(nicName string) string {
+	return fmt.Sprintf("%s//%s", "NIC", nicName)
 }

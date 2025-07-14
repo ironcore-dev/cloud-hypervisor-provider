@@ -55,7 +55,6 @@ type Options struct {
 
 	RootDir         string
 	MachineStoreDir string
-	NICStoreDir     string
 
 	MachineClasses MachineClassOptions
 
@@ -82,14 +81,6 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 		"provider-machine-store-dir",
 		filepath.Join(homeDir, ".cloud-hypervisor-provider/store/machine"),
 		"Path to the directory of the machine store.",
-	)
-
-	// TODO remove
-	fs.StringVar(
-		&o.NICStoreDir,
-		"provider-nic-store-dir",
-		filepath.Join(homeDir, ".cloud-hypervisor-provider/store/nics"),
-		"Path to the directory of the nics store.",
 	)
 
 	fs.StringVar(
@@ -249,26 +240,6 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	nicStore, err := hostutils.NewStore[*api.NetworkInterface](hostutils.Options[*api.NetworkInterface]{
-		Dir:            opts.NICStoreDir,
-		NewFunc:        func() *api.NetworkInterface { return &api.NetworkInterface{} },
-		CreateStrategy: strategy.NetworkInterfaceStrategy,
-	})
-	if err != nil {
-		setupLog.Error(err, "failed to initialize nic store")
-		return err
-	}
-
-	nicEvents, err := event.NewListWatchSource[*api.NetworkInterface](
-		nicStore.List,
-		nicStore.Watch,
-		event.ListWatchSourceOptions{},
-	)
-	if err != nil {
-		setupLog.Error(err, "failed to initialize nic events")
-		return err
-	}
-
 	var socketsInUse []string
 	machines, err := machineStore.List(ctx)
 	if err != nil {
@@ -303,8 +274,6 @@ func Run(ctx context.Context, opts Options) error {
 		eventRecorder,
 		virtualMachineManager,
 		pluginManager,
-		nicStore,
-		nicEvents,
 		nicPlugin,
 		controllers.MachineReconcilerOptions{
 			ImageCache: imgCache,
@@ -314,21 +283,6 @@ func Run(ctx context.Context, opts Options) error {
 	)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize machine controller")
-		return err
-	}
-
-	nicReconciler, err := controllers.NewNetworkInterfaceReconciler(
-		log.WithName("nic-reconciler"),
-		eventRecorder,
-		nicStore,
-		nicEvents,
-		nicPlugin,
-		controllers.NetworkInterfaceReconcilerOptions{
-			Paths: hostPaths,
-		},
-	)
-	if err != nil {
-		setupLog.Error(err, "failed to initialize nic controller")
 		return err
 	}
 
@@ -363,24 +317,6 @@ func Run(ctx context.Context, opts Options) error {
 		setupLog.Info("Starting machine events")
 		if err := machineEvents.Start(ctx); err != nil {
 			setupLog.Error(err, "failed to start machine events")
-			return err
-		}
-		return nil
-	})
-
-	g.Go(func() error {
-		setupLog.Info("Starting nic reconciler")
-		if err := nicReconciler.Start(ctx); err != nil {
-			setupLog.Error(err, "failed to start nic reconciler")
-			return err
-		}
-		return nil
-	})
-
-	g.Go(func() error {
-		setupLog.Info("Starting nic events")
-		if err := nicEvents.Start(ctx); err != nil {
-			setupLog.Error(err, "failed to start nic events")
 			return err
 		}
 		return nil

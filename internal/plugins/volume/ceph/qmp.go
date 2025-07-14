@@ -38,7 +38,7 @@ func (q *QMP) Mount(_ context.Context, machineID string, volume *validatedVolume
 		return "", fmt.Errorf("error creating ceph conf: %w", err)
 	}
 
-	handle := fmt.Sprintf("ceph-%s", volume.handle)
+	handle := fmt.Sprintf("ceph-%s", volume.name)
 
 	if _, err := q.queryBlockNode(handle); err != nil {
 		if !errors.Is(err, ErrNotFound) {
@@ -63,9 +63,9 @@ func (q *QMP) Mount(_ context.Context, machineID string, volume *validatedVolume
 	return socketPath, nil
 }
 
-func (q *QMP) Unmount(_ context.Context, machineID string, volumeID string) error {
+func (q *QMP) Unmount(_ context.Context, machineID string, volumeName string) error {
 
-	handle := fmt.Sprintf("ceph-%s", volumeID)
+	handle := fmt.Sprintf("ceph-%s", volumeName)
 
 	if _, err := q.queryBlockExports(handle); err != nil {
 		if !errors.Is(err, ErrNotFound) {

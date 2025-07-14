@@ -170,11 +170,13 @@ func (s *Server) getIRIMachineStatus(machine *api.Machine) (*iri.MachineStatus, 
 	}, nil
 }
 
-func (s *Server) getIRINICState(state api.MachineNetworkInterfaceState) (iri.NetworkInterfaceState, error) {
+func (s *Server) getIRINICState(state api.NetworkInterfaceState) (iri.NetworkInterfaceState, error) {
 	switch state {
-	case api.MachineNetworkInterfaceStateAttached:
+	case api.NetworkInterfaceStateAttached:
 		return iri.NetworkInterfaceState_NETWORK_INTERFACE_ATTACHED, nil
-	case api.MachineNetworkInterfaceStatePending:
+	case api.NetworkInterfaceStatePrepared:
+		fallthrough
+	case api.NetworkInterfaceStatePending:
 		return iri.NetworkInterfaceState_NETWORK_INTERFACE_PENDING, nil
 	default:
 		return 0, fmt.Errorf("unknown network interface state '%q'", state)
@@ -185,9 +187,6 @@ func (s *Server) getIRIVolumeState(state api.VolumeState) (iri.VolumeState, erro
 	switch state {
 	case api.VolumeStateAttached:
 		return iri.VolumeState_VOLUME_ATTACHED, nil
-	//	TODO
-	case "":
-		fallthrough
 	case api.VolumeStatePrepared:
 		fallthrough
 	case api.VolumeStatePending:
@@ -269,12 +268,12 @@ func (s *Server) getVolumeFromIRIVolume(iriVolume *iri.Volume) (*api.VolumeSpec,
 	return volumeSpec, nil
 }
 
-func (s *Server) getNICFromIRINIC(iriNIC *iri.NetworkInterface) (*api.MachineNetworkInterfaceSpec, error) {
+func (s *Server) getNICFromIRINIC(iriNIC *iri.NetworkInterface) (*api.NetworkInterfaceSpec, error) {
 	if iriNIC == nil {
 		return nil, fmt.Errorf("networkInterface is nil")
 	}
 
-	return &api.MachineNetworkInterfaceSpec{
+	return &api.NetworkInterfaceSpec{
 		Name:       iriNIC.Name,
 		NetworkId:  iriNIC.NetworkId,
 		Ips:        iriNIC.Ips,

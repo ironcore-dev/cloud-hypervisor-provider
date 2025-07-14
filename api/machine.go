@@ -27,17 +27,17 @@ type MachineSpec struct {
 	Image    *string `json:"image"`
 	Ignition []byte  `json:"ignition"`
 
-	Volumes           []*VolumeSpec                  `json:"volumes"`
-	NetworkInterfaces []*MachineNetworkInterfaceSpec `json:"networkInterfaces"`
+	Volumes           []*VolumeSpec           `json:"volumes"`
+	NetworkInterfaces []*NetworkInterfaceSpec `json:"networkInterfaces"`
 
 	ShutdownAt time.Time `json:"shutdownAt,omitempty"`
 }
 
 type MachineStatus struct {
-	VolumeStatus           []VolumeStatus                  `json:"volumeStatus"`
-	NetworkInterfaceStatus []MachineNetworkInterfaceStatus `json:"networkInterfaceStatus"`
-	State                  MachineState                    `json:"state"`
-	ImageRef               string                          `json:"imageRef"`
+	VolumeStatus           []VolumeStatus           `json:"volumeStatus"`
+	NetworkInterfaceStatus []NetworkInterfaceStatus `json:"networkInterfaceStatus"`
+	State                  MachineState             `json:"state"`
+	ImageRef               string                   `json:"imageRef"`
 }
 
 type MachineState string
@@ -101,7 +101,7 @@ const (
 	VolumeFileType   VolumeType = "file"
 )
 
-type MachineNetworkInterfaceSpec struct {
+type NetworkInterfaceSpec struct {
 	Name       string            `json:"name"`
 	NetworkId  string            `json:"networkId"`
 	Ips        []string          `json:"ips"`
@@ -109,15 +109,25 @@ type MachineNetworkInterfaceSpec struct {
 	DeletedAt  *time.Time        `json:"deletedAt,omitempty"`
 }
 
-type MachineNetworkInterfaceStatus struct {
-	Name   string                       `json:"name"`
-	Handle string                       `json:"handle"`
-	State  MachineNetworkInterfaceState `json:"state"`
+type NetworkInterfaceStatus struct {
+	Name   string                `json:"name"`
+	Handle string                `json:"handle"`
+	State  NetworkInterfaceState `json:"state"`
+	Type   NetworkInterfaceType  `json:"type,omitempty"`
+	Path   string                `json:"path,omitempty"`
 }
 
-type MachineNetworkInterfaceState string
+type NetworkInterfaceState string
 
 const (
-	MachineNetworkInterfaceStatePending  MachineNetworkInterfaceState = "Pending"
-	MachineNetworkInterfaceStateAttached MachineNetworkInterfaceState = "Attached"
+	NetworkInterfaceStatePending  NetworkInterfaceState = "Pending"
+	NetworkInterfaceStatePrepared NetworkInterfaceState = "Prepared"
+	NetworkInterfaceStateAttached NetworkInterfaceState = "Attached"
+)
+
+type NetworkInterfaceType string
+
+const (
+	NetworkInterfacePCIType NetworkInterfaceType = "pci"
+	NetworkInterfaceTAPType NetworkInterfaceType = "tap"
 )

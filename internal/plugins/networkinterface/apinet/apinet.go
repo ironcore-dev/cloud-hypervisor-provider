@@ -24,7 +24,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -153,21 +152,23 @@ func (p *Plugin) Apply(
 		return nil, fmt.Errorf("error applying apinet network interface: %w", err)
 	}
 
-	pciAddress, err := getPCIAddress(apinetNic)
-	if err != nil {
-		return nil, fmt.Errorf("error getting host device: %w", err)
-	}
-	if pciAddress != nil {
-		log.V(1).Info("Host device is ready", "HostDevice", pciAddress)
+	if apinetNic.Status.State == apinetv1alpha1.NetworkInterfaceStateReady {
+		path, deviceType, err := getDeviceInfo(&apinetNic.Status)
+		if err != nil {
+			return nil, fmt.Errorf("error getting device info: %w", err)
+		}
+
 		return &api.NetworkInterfaceStatus{
+			Name: spec.Name,
 			Handle: provider.GetNetworkInterfaceID(
 				apinetNic.Namespace,
 				apinetNic.Name,
 				apinetNic.Spec.NodeRef.Name,
 				apinetNic.UID,
 			),
-			Path:  fmt.Sprintf("/sys/bus/pci/devices/%s", ptr.Deref(pciAddress, "")),
-			State: api.NetworkInterfaceStateAttached,
+			State: api.NetworkInterfaceStatePrepared,
+			Type:  deviceType,
+			Path:  path,
 		}, nil
 	}
 
@@ -183,11 +184,7 @@ func (p *Plugin) Apply(
 				return false, fmt.Errorf("error getting apinet nic %s: %w", apinetNicKey, err)
 			}
 
-			pciAddress, err = getPCIAddress(apinetNic)
-			if err != nil {
-				return false, fmt.Errorf("error getting host device: %w", err)
-			}
-			return pciAddress != nil, nil
+			return apinetNic.Status.State == apinetv1alpha1.NetworkInterfaceStateReady, nil
 		}); err != nil {
 		return nil, fmt.Errorf("error waiting for nic to become ready: %w", err)
 	}
@@ -197,46 +194,50 @@ func (p *Plugin) Apply(
 		return nil, fmt.Errorf("error fetching updated apinet network interface: %w", err)
 	}
 
+	if apinetNic.Status.State == apinetv1alpha1.NetworkInterfaceStateReady {
+		path, deviceType, err := getDeviceInfo(&apinetNic.Status)
+		if err != nil {
+			return nil, fmt.Errorf("error getting device info: %w", err)
+		}
+
+		return &api.NetworkInterfaceStatus{
+			Name: spec.Name,
+			Handle: provider.GetNetworkInterfaceID(
+				apinetNic.Namespace,
+				apinetNic.Name,
+				apinetNic.Spec.NodeRef.Name,
+				apinetNic.UID,
+			),
+			State: api.NetworkInterfaceStatePrepared,
+			Type:  deviceType,
+			Path:  path,
+		}, nil
+	}
+
 	return &api.NetworkInterfaceStatus{
-		Handle: provider.GetNetworkInterfaceID(
-			apinetNic.Namespace,
-			apinetNic.Name,
-			apinetNic.Spec.NodeRef.Name,
-			apinetNic.UID,
-		),
-		Path:  fmt.Sprintf("/sys/bus/pci/devices/%s", ptr.Deref(pciAddress, "")),
-		State: api.NetworkInterfaceStateAttached,
+		Name:  spec.Name,
+		State: api.NetworkInterfaceStatePending,
 	}, nil
 }
 
-func getPCIAddress(apinetNic *apinetv1alpha1.NetworkInterface) (*string, error) {
-	switch apinetNic.Status.State {
-	case apinetv1alpha1.NetworkInterfaceStateReady:
-		switch {
-		case apinetNic.Status.PCIAddress == nil && apinetNic.Status.TAPDevice == nil:
-			return nil, fmt.Errorf("apinet network interface: PCIAddress and TAPDevice not set")
-		case apinetNic.Status.PCIAddress == nil && apinetNic.Status.TAPDevice != nil:
-			//TODO
-			return nil, fmt.Errorf("not implemented")
-		case apinetNic.Status.PCIAddress != nil && apinetNic.Status.TAPDevice == nil:
-			pciDevice := apinetNic.Status.PCIAddress
-			return ptr.To(fmt.Sprintf("%s:%s:%s.%s",
-				pciDevice.Domain,
-				pciDevice.Bus,
-				pciDevice.Slot,
-				pciDevice.Function,
-			)), nil
-		default:
-			return nil, fmt.Errorf("apinet network interface: PCIAddress and TAPDevice should not be set at the same" +
-				" time")
-		}
-	case apinetv1alpha1.NetworkInterfaceStatePending:
-		return nil, nil
-	case apinetv1alpha1.NetworkInterfaceStateError:
-		return nil, fmt.Errorf("apinet network interface is in state error")
-	default:
-		return nil, nil
+func getDeviceInfo(status *apinetv1alpha1.NetworkInterfaceStatus) (string, api.NetworkInterfaceType, error) {
+	if status.PCIAddress != nil {
+		pciDevice := status.PCIAddress
+		pciAddress := fmt.Sprintf("%s:%s:%s.%s",
+			pciDevice.Domain,
+			pciDevice.Bus,
+			pciDevice.Slot,
+			pciDevice.Function,
+		)
+
+		return fmt.Sprintf("/sys/bus/pci/devices/%s", pciAddress), api.NetworkInterfacePCIType, nil
 	}
+
+	if status.TAPDevice != nil {
+		return status.TAPDevice.Name, api.NetworkInterfaceTAPType, nil
+	}
+
+	return "", "", fmt.Errorf("no TAP device or PCI address found")
 }
 
 func (p *Plugin) Delete(ctx context.Context, computeNicName string, machineID string) error {

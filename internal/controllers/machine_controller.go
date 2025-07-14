@@ -22,7 +22,6 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
-	apiutils "github.com/ironcore-dev/provider-utils/apiutils/api"
 	"github.com/ironcore-dev/provider-utils/eventutils/event"
 	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
 	"github.com/ironcore-dev/provider-utils/storeutils/store"
@@ -51,8 +50,6 @@ func NewMachineReconciler(
 	eventRecorder recorder.EventRecorder,
 	vmm *vmm.Manager,
 	volumePluginManager *volume.PluginManager,
-	nics store.Store[*api.NetworkInterface],
-	nicEvents event.Source[*api.NetworkInterface],
 	nicPlugin networkinterface.Plugin,
 	opts MachineReconcilerOptions,
 ) (*MachineReconciler, error) {
@@ -71,7 +68,6 @@ func NewMachineReconciler(
 		),
 		machines:               machines,
 		machineEvents:          machineEvents,
-		nicEvents:              nicEvents,
 		EventRecorder:          eventRecorder,
 		imageCache:             opts.ImageCache,
 		raw:                    opts.Raw,
@@ -79,7 +75,6 @@ func NewMachineReconciler(
 		vmm:                    vmm,
 		VolumePluginManager:    volumePluginManager,
 		networkInterfacePlugin: nicPlugin,
-		nics:                   nics,
 	}, nil
 }
 
@@ -99,9 +94,7 @@ type MachineReconciler struct {
 
 	machines      store.Store[*api.Machine]
 	machineEvents event.Source[*api.Machine]
-	nicEvents     event.Source[*api.NetworkInterface]
 
-	nics store.Store[*api.NetworkInterface]
 	recorder.EventRecorder
 }
 
@@ -140,23 +133,6 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 	defer func() {
 		if err = r.machineEvents.RemoveHandler(machineEventHandlerRegistration); err != nil {
 			log.Error(err, "failed to remove machine event handler")
-		}
-	}()
-
-	nicEventHandlerRegistration, err := r.nicEvents.AddHandler(
-		event.HandlerFunc[*api.NetworkInterface](func(evt event.Event[*api.NetworkInterface]) {
-			log.V(2).Info("NIC event received", "type", evt.Type, "id", evt.Object.ID)
-			machineID := getMachineNameFromNicID(evt.Object.ID)
-			if machineID != nil {
-				r.queue.Add(ptr.Deref(machineID, ""))
-			}
-		}))
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err = r.nicEvents.RemoveHandler(nicEventHandlerRegistration); err != nil {
-			log.Error(err, "failed to remove nic event handler")
 		}
 	}()
 
@@ -199,26 +175,9 @@ func (r *MachineReconciler) processNextWorkItem(ctx context.Context, log logr.Lo
 	return true
 }
 
-func getNicID(machineID, nicName string) string {
-	return fmt.Sprintf("%s--%s--%s", "NIC", machineID, nicName)
-}
-
 func getNicName(id string) *string {
-	parts := strings.Split(id, "--")
-	if len(parts) != 3 {
-		return nil
-	}
-
-	if parts[0] != "NIC" {
-		return nil
-	}
-
-	return &parts[2]
-}
-
-func getMachineNameFromNicID(id string) *string {
-	parts := strings.Split(id, "--")
-	if len(parts) != 3 {
+	parts := strings.Split(id, "//")
+	if len(parts) != 2 {
 		return nil
 	}
 
@@ -258,6 +217,18 @@ func getVolumeStatus(volumes []api.VolumeStatus, name string) api.VolumeStatus {
 	}
 }
 
+func getNICStatus(nics []api.NetworkInterfaceStatus, name string) api.NetworkInterfaceStatus {
+	for _, nic := range nics {
+		if nic.Name == name {
+			return nic
+		}
+	}
+	return api.NetworkInterfaceStatus{
+		Name:  name,
+		State: api.NetworkInterfaceStatePending,
+	}
+}
+
 func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, machine *api.Machine) error {
 
 	state, err := r.getMachineState(ctx, machine)
@@ -275,25 +246,28 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 		return fmt.Errorf("failed to kill VMM: %w", err)
 	}
 
-	allNicsDeleted := true
-	for _, machineNic := range machine.Spec.NetworkInterfaces {
-		nicName := getNicID(machine.ID, machineNic.Name)
-		if nic, err := r.nics.Get(ctx, nicName); !errors.Is(err, store.ErrNotFound) {
-			allNicsDeleted = false
-			if err := r.removeFinalizerFromNIC(ctx, nic); err != nil {
-				return fmt.Errorf("failed to remove finalizer from NIC: %w", err)
-			}
-			if err := r.nics.Delete(ctx, getNicID(machine.ID, machineNic.Name)); store.IgnoreErrNotFound(err) != nil {
-				return fmt.Errorf("failed to delete nic %s: %w", machineNic.Name, err)
-			}
+	for _, vol := range machine.Spec.Volumes {
+		plugin, err := r.VolumePluginManager.FindPluginBySpec(vol)
+		if err != nil {
+			return fmt.Errorf("failed to find plugin: %w", err)
+		}
+
+		log.V(2).Info("Delete volume", "name", vol.Name, "plugin", plugin.Name())
+		if err := plugin.Delete(ctx, vol.Name, machine.ID); err != nil {
+			return fmt.Errorf("failed to delete volume %s: %w", vol.Name, err)
 		}
 	}
-	if !allNicsDeleted {
-		log.V(1).Info("Wait until all nics are deleted")
-		return nil
+
+	for _, nic := range machine.Spec.NetworkInterfaces {
+		log.V(2).Info("Delete NIC", "name", nic.Name)
+		if err := r.networkInterfacePlugin.Delete(ctx, nic.Name, machine.ID); err != nil {
+			return fmt.Errorf("failed to delete nic %s: %w", nic.Name, err)
+		}
 	}
 
-	//TODO volume
+	if socket := ptr.Deref(machine.Spec.ApiSocketPath, ""); socket != "" {
+		r.vmm.FreeApiSocket(socket)
+	}
 
 	if err := os.RemoveAll(r.paths.MachineDir(machine.ID)); err != nil {
 		return fmt.Errorf("failed to remove machine directory: %w", err)
@@ -327,7 +301,7 @@ func (r *MachineReconciler) reconcileVolumes(ctx context.Context, log logr.Logge
 		if vol.DeletedAt != nil {
 			if status.State != api.VolumeStateAttached {
 				log.V(2).Info("Delete not attached volume", "name", vol.Name)
-				if err := plugin.Delete(ctx, vol.Connection.Handle, machine.ID); err != nil {
+				if err := plugin.Delete(ctx, vol.Name, machine.ID); err != nil {
 					return fmt.Errorf("failed to delete volume %s: %w", vol.Name, err)
 				}
 				continue
@@ -357,6 +331,51 @@ func (r *MachineReconciler) reconcileVolumes(ctx context.Context, log logr.Logge
 	return nil
 }
 
+func (r *MachineReconciler) reconcileNics(ctx context.Context, log logr.Logger, machine *api.Machine) error {
+	var updatedNICStatus []api.NetworkInterfaceStatus
+	var updatedNICSpec []*api.NetworkInterfaceSpec
+
+	plugin := r.networkInterfacePlugin
+	for _, nic := range machine.Spec.NetworkInterfaces {
+
+		log.V(2).Info("Reconcile NIC", "name", nic.Name, "plugin", plugin.Name())
+
+		status := getNICStatus(machine.Status.NetworkInterfaceStatus, nic.Name)
+
+		if nic.DeletedAt != nil {
+			if status.State != api.NetworkInterfaceStateAttached {
+				log.V(2).Info("Delete detached  NIC", "name", nic.Name)
+				if err := plugin.Delete(ctx, nic.Name, machine.ID); err != nil {
+					return fmt.Errorf("failed to delete NIC %s: %w", nic.Name, err)
+				}
+				continue
+			}
+			log.V(2).Info("NIC attached but deletion timestamp set", "name", nic.Name)
+		}
+
+		appliedNIC, err := plugin.Apply(ctx, nic, machine.ID)
+		if err != nil {
+			return fmt.Errorf("failed to apply NIC: %w", err)
+		}
+		if status.State == api.NetworkInterfaceStateAttached {
+			appliedNIC.State = status.State
+		}
+		updatedNICSpec = append(updatedNICSpec, nil)
+		updatedNICStatus = append(updatedNICStatus, *appliedNIC)
+		log.V(2).Info("NIC reconciled", "name", nic.Name)
+	}
+
+	machine.Spec.NetworkInterfaces = updatedNICSpec
+	machine.Status.NetworkInterfaceStatus = updatedNICStatus
+
+	if _, err := r.machines.Update(ctx, machine); err != nil {
+		return fmt.Errorf("failed to update machine status: %w", err)
+	}
+
+	return nil
+}
+
+// nolint: dupl
 func (r *MachineReconciler) attachDetachDisks(
 	ctx context.Context,
 	log logr.Logger,
@@ -410,6 +429,68 @@ func (r *MachineReconciler) attachDetachDisks(
 	}
 
 	machine.Status.VolumeStatus = updatedVolumeStatus
+	if _, err := r.machines.Update(ctx, machine); err != nil {
+		return fmt.Errorf("failed to update machine status: %w", err)
+	}
+
+	return nil
+}
+
+// nolint: dupl
+func (r *MachineReconciler) attachDetachNICs(
+	ctx context.Context,
+	log logr.Logger,
+	machine *api.Machine,
+	vm client.VmConfig,
+) error {
+	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
+	currentDevices := sets.New[string]()
+
+	for _, dev := range ptr.Deref(vm.Devices, []client.DeviceConfig{}) {
+		name := getNicName(ptr.Deref(dev.Id, ""))
+		if name == nil {
+			continue
+		}
+		currentDevices.Insert(ptr.Deref(name, ""))
+	}
+
+	var updatedNICStatus []api.NetworkInterfaceStatus
+	for _, nic := range machine.Spec.NetworkInterfaces {
+		status := getNICStatus(machine.Status.NetworkInterfaceStatus, nic.Name)
+
+		if nic.DeletedAt == nil {
+			if !currentDevices.Has(status.Name) {
+				if status.State != api.NetworkInterfaceStatePrepared {
+					log.V(1).Info("Skip NIC attachment: not prepared", "nic", nic.Name)
+					continue
+				}
+
+				if err := r.vmm.AddNIC(ctx, apiSocket, ptr.To(status)); err != nil {
+					return fmt.Errorf("failed to add disk %s: %w", nic.Name, err)
+				}
+
+				log.V(1).Info("Added NIC", "nic", nic.Name)
+			}
+			status.State = api.NetworkInterfaceStateAttached
+			updatedNICStatus = append(updatedNICStatus, status)
+		} else {
+			if currentDevices.Has(status.Name) {
+				if err := r.vmm.RemoveNIC(ctx, apiSocket, nic.Name); err != nil {
+					return fmt.Errorf("failed to remove NIC %s: %w", status.Name, err)
+				}
+				log.V(1).Info("Removed NIC", "nic", status.Name)
+
+				updatedNICStatus = append(updatedNICStatus, status)
+				continue
+			}
+
+			log.V(1).Info("NIC not present: Update status", "nic", nic.Name)
+			status.State = api.NetworkInterfaceStatePrepared
+			updatedNICStatus = append(updatedNICStatus, status)
+		}
+	}
+
+	machine.Status.NetworkInterfaceStatus = updatedNICStatus
 	if _, err := r.machines.Update(ctx, machine); err != nil {
 		return fmt.Errorf("failed to update machine status: %w", err)
 	}
@@ -475,50 +556,12 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return fmt.Errorf("failed to ping vmm: %w", err)
 	}
 
-	nics := make(map[string]*api.NetworkInterface)
-	for _, networkInterface := range machine.Spec.NetworkInterfaces {
-		nicID := getNicID(machine.ID, networkInterface.Name)
-
-		nic, err := r.nics.Get(ctx, nicID)
-		if err != nil {
-			if !errors.Is(err, store.ErrNotFound) {
-				return fmt.Errorf("failed to fetch nic from store: %w", err)
-			}
-
-			if networkInterface.DeletedAt != nil {
-				log.V(2).Info("Network interface not found, skipping because deletion timestamp", "nicID", nicID)
-				continue
-			}
-
-			log.V(2).Info("Network interface not present, create it", "nicID", nicID)
-			nic, err = r.nics.Create(ctx, &api.NetworkInterface{
-				Metadata: apiutils.Metadata{
-					ID: nicID,
-				},
-				Spec: api.NetworkInterfaceSpec{
-					Name:       networkInterface.Name,
-					NetworkId:  networkInterface.NetworkId,
-					Ips:        networkInterface.Ips,
-					Attributes: networkInterface.Attributes,
-				},
-			})
-			if err != nil {
-				return fmt.Errorf("failed to create network interface: %w", err)
-			}
-		}
-
-		if networkInterface.DeletedAt != nil {
-			log.V(2).Info("NetworkInterface should be deleted", "nicID", nicID)
-			if err := r.nics.Delete(ctx, nicID); err != nil {
-				return fmt.Errorf("failed to delete network interface %s: %w", nicID, err)
-			}
-		}
-
-		nics[networkInterface.Name] = nic
-	}
-
 	if err := r.reconcileVolumes(ctx, log, machine); err != nil {
 		return fmt.Errorf("failed to reconcile volumes: %w", err)
+	}
+
+	if err := r.reconcileNics(ctx, log, machine); err != nil {
+		return fmt.Errorf("failed to reconcile nics: %w", err)
 	}
 
 	vm, err := r.vmm.GetVM(ctx, apiSocket)
@@ -529,20 +572,9 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 
 		log.V(1).Info("VM not created", "machine", machine.ID)
 
-		if !r.nicsReady(nics) {
-			log.V(1).Info("Not all Network Interfaces are ready")
-			return nil
-		}
-
-		if err := r.vmm.CreateVM(ctx, machine, nics); err != nil {
+		if err := r.vmm.CreateVM(ctx, machine); err != nil {
 			log.V(1).Info("Failed to create VM", "machine", machine.ID)
 			return fmt.Errorf("failed to create VM: %w", err)
-		}
-
-		for _, nic := range nics {
-			if err := r.addFinalizerToNIC(ctx, nic); err != nil {
-				return fmt.Errorf("failed to add finalizer to NIC: %w", err)
-			}
 		}
 
 		log.V(1).Info("Successfully created VM, requeue", "machine", machine.ID)
@@ -569,11 +601,11 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		}
 	}
 
-	if err := r.reconcileNics(ctx, log, machine, nics, ptr.Deref(vm.Config.Devices, nil)); err != nil {
-		return fmt.Errorf("failed to reconcile nics: %w", err)
+	if err := r.attachDetachDisks(ctx, log, machine, vm.Config); err != nil {
+		return fmt.Errorf("failed to attach detach disks: %w", err)
 	}
 
-	if err := r.attachDetachDisks(ctx, log, machine, vm.Config); err != nil {
+	if err := r.attachDetachNICs(ctx, log, machine, vm.Config); err != nil {
 		return fmt.Errorf("failed to attach detach disks: %w", err)
 	}
 
@@ -583,120 +615,13 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 	case api.PowerStatePowerOff:
 		machine.Status.State = api.MachineStateTerminated
 	}
-	machine.Status.NetworkInterfaceStatus = []api.MachineNetworkInterfaceStatus{}
-	for _, nic := range machine.Spec.NetworkInterfaces {
-		nicStatus := api.MachineNetworkInterfaceStatus{
-			Name:  nic.Name,
-			State: api.MachineNetworkInterfaceStatePending,
-		}
 
-		if n, ok := nics[nic.Name]; ok && n.Status.State == api.NetworkInterfaceStateAttached {
-			nicStatus.State = api.MachineNetworkInterfaceStateAttached
-			nicStatus.Handle = n.Status.Handle
-		}
-
-		machine.Status.NetworkInterfaceStatus = append(machine.Status.NetworkInterfaceStatus, nicStatus)
-	}
 	machine, err = r.machines.Update(ctx, machine)
 	if err != nil {
 		return fmt.Errorf("failed to update machine status: %w", err)
 	}
 
 	log.V(1).Info("Successfully reconciled VM", "machine", machine.ID)
-	return nil
-}
-
-func (r *MachineReconciler) reconcileNics(
-	ctx context.Context,
-	log logr.Logger,
-	machine *api.Machine,
-	desiredNics map[string]*api.NetworkInterface,
-	currentDevices []client.DeviceConfig,
-) error {
-	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
-	currentNICs := sets.New[string]()
-
-	for _, device := range currentDevices {
-		deviceID := ptr.Deref(device.Id, "")
-		if getNicName(deviceID) == nil {
-			continue
-		}
-
-		nicName := ptr.Deref(getNicName(deviceID), "")
-
-		if nic, ok := desiredNics[nicName]; ok {
-			if nic.DeletedAt == nil {
-				currentNICs.Insert(nicName)
-				continue
-			}
-
-			log.V(1).Info("Deleting NIC", "device", deviceID, "nicName", nicName)
-			if err := r.vmm.RemoveDevice(ctx, apiSocket, deviceID); err != nil {
-				return fmt.Errorf("failed to remove nic: %w", err)
-			}
-
-			if err := r.removeFinalizerFromNIC(ctx, nic); err != nil {
-				return fmt.Errorf("failed to remove finalizer from NIC: %w", err)
-			}
-		}
-	}
-
-	for nicName, nic := range desiredNics {
-		if nic.DeletedAt != nil {
-			continue
-		}
-
-		if _, ok := currentNICs[nicName]; !ok {
-			if err := r.addFinalizerToNIC(ctx, nic); err != nil {
-				return fmt.Errorf("failed to add finalizer to NIC: %w", err)
-			}
-
-			log.V(1).Info("Adding NIC", "device", nicName, "nicName", nicName)
-			if err := r.vmm.AddNIC(ctx, apiSocket, nic); err != nil {
-				return fmt.Errorf("failed to add NIC %s: %w", nicName, err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (r *MachineReconciler) nicsReady(nics map[string]*api.NetworkInterface) bool {
-	for _, nic := range nics {
-		if nic == nil {
-			continue
-		}
-
-		if nic.Status.State != api.NetworkInterfaceStateAttached {
-			return false
-		}
-	}
-	return true
-}
-
-func (r *MachineReconciler) addFinalizerToNIC(ctx context.Context, nic *api.NetworkInterface) error {
-	if slices.Contains(nic.Finalizers, MachineFinalizer) {
-		return nil
-	}
-
-	nic.Finalizers = append(nic.Finalizers, MachineFinalizer)
-	if _, err := r.nics.Update(ctx, nic); err != nil {
-		return fmt.Errorf("failed to set nic finalizers: %w", err)
-	}
-
-	return nil
-}
-
-func (r *MachineReconciler) removeFinalizerFromNIC(ctx context.Context, nic *api.NetworkInterface) error {
-	if !slices.Contains(nic.Finalizers, MachineFinalizer) {
-		return nil
-	}
-
-	nic.Finalizers = utils.DeleteSliceElement(nic.Finalizers, MachineFinalizer)
-	if _, err := r.nics.Update(ctx, nic); err != nil {
-		return fmt.Errorf("failed to remove nic finalizers: %w", err)
-	}
-
 	return nil
 }
 

@@ -34,6 +34,7 @@ const (
 )
 
 type validatedVolume struct {
+	name          string
 	monitors      []string
 	pool          string
 	image         string
@@ -213,6 +214,7 @@ func (p *plugin) validateVolume(spec *api.VolumeSpec) (vData *validatedVolume, e
 	}
 
 	vData = &validatedVolume{
+		name:   spec.Name,
 		handle: connection.Handle,
 	}
 
