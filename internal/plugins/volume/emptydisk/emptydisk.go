@@ -5,12 +5,13 @@ package emptydisk
 
 import (
 	"context"
-	"crypto/rand"
+	"crypto/sha1"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
@@ -68,11 +69,6 @@ func (p *plugin) Apply(_ context.Context, spec *api.VolumeSpec, machineID string
 		return nil, err
 	}
 
-	handle, err := randomHex(8)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate WWN/handle for the disk: %w", err)
-	}
-
 	size := spec.EmptyDisk.Size
 	if size == 0 {
 		size = defaultSize
@@ -95,7 +91,7 @@ func (p *plugin) Apply(_ context.Context, spec *api.VolumeSpec, machineID string
 		Name:   spec.Name,
 		Type:   api.VolumeFileType,
 		Path:   diskFilename,
-		Handle: handle,
+		Handle: generateWWN(machineID, spec.Name),
 		State:  api.VolumeStatePrepared,
 		Size:   size,
 	}, nil
@@ -105,11 +101,12 @@ func (p *plugin) Delete(_ context.Context, computeVolumeName string, machineID s
 	return os.RemoveAll(p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), computeVolumeName))
 }
 
-// randomHex generates random hexadecimal digits of the length n*2.
-func randomHex(n int) (string, error) {
-	bytes := make([]byte, n)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
+func generateWWN(machineID, diskName string) string {
+	input := fmt.Sprintf("%s:%s", machineID, diskName)
+	hash := sha1.Sum([]byte(input))
+	wwnBytes := hash[:8]
+
+	wwnBytes[0] |= 0x80
+
+	return strings.ToUpper(hex.EncodeToString(wwnBytes))
 }
