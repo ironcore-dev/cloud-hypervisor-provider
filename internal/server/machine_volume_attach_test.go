@@ -4,6 +4,8 @@
 package server_test
 
 import (
+	"fmt"
+
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
 	irimeta "github.com/ironcore-dev/ironcore/iri/apis/meta/v1alpha1"
 	machinepoolletv1alpha1 "github.com/ironcore-dev/ironcore/poollet/machinepoollet/api/v1alpha1"
@@ -53,6 +55,10 @@ var _ = Describe("AttachVolume", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(updatedMachine.Machines).To(HaveLen(1))
 		Expect(updatedMachine.Machines[0].Spec.Volumes).To(HaveLen(1))
-		Expect(updatedMachine.Machines[0].Spec.Volumes).To(ContainElement(volume))
+		Expect(updatedMachine.Machines[0].Spec.Volumes).To(ContainElement(
+			WithTransform(func(v *iri.Volume) string {
+				return fmt.Sprintf("%s-%s-%d", v.Name, v.Device, v.EmptyDisk.SizeBytes)
+			}, Equal(fmt.Sprintf("%s-%s-%d", volume.Name, volume.Device, volume.EmptyDisk.SizeBytes))),
+		))
 	})
 })

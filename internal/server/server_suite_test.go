@@ -86,7 +86,7 @@ var _ = BeforeEach(func() {
 	classRegistry, err := mcr.NewMachineClassRegistry([]mcr.MachineClass{
 		{
 			Name:        machineClassName,
-			CpuMillis:   1000,
+			Cpu:         1000,
 			MemoryBytes: 2147483648,
 		},
 	})
