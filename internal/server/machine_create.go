@@ -67,7 +67,7 @@ func (s *Server) createMachineFromIRIMachine(
 		},
 		Spec: api.MachineSpec{
 			Power:             power,
-			Cpu:               int64(math.Max(float64(class.CpuMillis/1000), 1)),
+			Cpu:               int64(math.Max(float64(class.Cpu), 1)),
 			MemoryBytes:       class.MemoryBytes,
 			Volumes:           volumes,
 			Ignition:          iriMachine.Spec.IgnitionData,

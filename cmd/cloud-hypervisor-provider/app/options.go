@@ -11,7 +11,7 @@ import (
 
 type MachineClass struct {
 	Name        string
-	CpuMillis   int64
+	Cpu         int64
 	MemoryBytes int64
 }
 type MachineClassOptions []MachineClass
@@ -19,7 +19,7 @@ type MachineClassOptions []MachineClass
 func (ml *MachineClassOptions) String() string {
 	var parts []string
 	for _, m := range *ml {
-		parts = append(parts, fmt.Sprintf("%s,%d,%d", m.Name, m.CpuMillis, m.MemoryBytes))
+		parts = append(parts, fmt.Sprintf("%s,%d,%d", m.Name, m.Cpu, m.MemoryBytes))
 	}
 	return strings.Join(parts, "; ")
 }
@@ -42,7 +42,7 @@ func (ml *MachineClassOptions) Set(value string) error {
 
 	*ml = append(*ml, MachineClass{
 		Name:        parts[0],
-		CpuMillis:   cpuMillis,
+		Cpu:         cpuMillis,
 		MemoryBytes: memoryBytes,
 	})
 

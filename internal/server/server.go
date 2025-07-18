@@ -24,6 +24,8 @@ var _ iri.MachineRuntimeServer = (*Server)(nil)
 type Server struct {
 	idGen idgen.IDGen
 
+	iri.UnimplementedMachineRuntimeServer
+
 	machineClassRegistry mcr.MachineClassRegistry
 
 	machineStore store.Store[*api.Machine]

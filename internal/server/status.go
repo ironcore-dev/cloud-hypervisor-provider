@@ -18,8 +18,10 @@ func (s *Server) Status(ctx context.Context, _ *iri.StatusRequest) (*iri.StatusR
 			MachineClass: &iri.MachineClass{
 				Name: class.Name,
 				Capabilities: &iri.MachineClassCapabilities{
-					CpuMillis:   class.CpuMillis,
-					MemoryBytes: class.MemoryBytes,
+					Resources: map[string]int64{
+						"cpu":    class.Cpu,
+						"memory": class.MemoryBytes,
+					},
 				},
 			},
 			//TODO will be deprecated soon

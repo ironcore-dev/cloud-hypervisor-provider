@@ -14,7 +14,7 @@ type MachineClassRegistry interface {
 
 type MachineClass struct {
 	Name        string
-	CpuMillis   int64
+	Cpu         int64
 	MemoryBytes int64
 }
 
