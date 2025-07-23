@@ -1,0 +1,78 @@
+# This is also provided directly by cloud hypervisor, but it's a rather old version
+# https://github.com/cloud-hypervisor/edk2/releases/tag/ch-a54f262b09
+# https://www.cloudhypervisor.org/docs/prologue/quick-start/#booting-linux
+# TODO: do we need this for arm?
+name: ch-fw-edk2 
+on:
+  workflow_dispatch:
+    inputs:
+      edk2_release:
+        type: string
+        default: "edk2-stable2025XX"  
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout edk2 repository
+        uses: actions/checkout@v4
+        with:
+          repository: tianocore/edk2
+          submodules: recursive
+          ref: ${{ inputs.edk2_release }} 
+          fetch-depth: 0
+      - name: Install dependencies 
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install uuid-dev iasl build-essential python3-distutils-extra libbrotli-dev nasm
+      - name: Build
+        run: |
+          source edksetup.sh
+          make -C BaseTools
+          ./OvmfPkg/build.sh -a X64 -p OvmfPkg/CloudHv/CloudHvX64.dsc -t GCC5 -b RELEASE 
+          ls -la
+          find . | grep CLOUDHV.fd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-fw
+          path: Build/CloudHvX64/RELEASE_GCC5/FV/CLOUDHV.fd
+  release:
+    runs-on: ubuntu-latest
+    needs: build 
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: binary-fw 
+          path: binary-fw 
+      - name: publish release
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_NOTES=$(mktemp)
+          echo "created by GitHub actions run [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $RELEASE_NOTES
+          echo "" >> $RELEASE_NOTES
+          echo '```' >> $RELEASE_NOTES
+          echo "based on ${{ inputs.edk2_release }}" >> $RELEASE_NOTES
+          echo '```' >> $RELEASE_NOTES
+          echo "License information from : [tianocore/edk2](https://github.com/tianocore/edk2)" >> $RELEASE_NOTES
+          echo "The majority of the content in the EDK II open source project uses a [BSD-2-Clause Plus Patent License](https://github.com/tianocore/edk2/blob/master/License.txt)" >> $RELEASE_NOTES
+          echo "The EDK II open source project contains the following components that are covered by additional licenses:" >> $RELEASE_NOTES
+          echo "BaseTools/Plugin/CodeQL/analyze BaseTools/Source/C/LzmaCompress BaseTools/Source/C/VfrCompile/Pccts CryptoPkgLibraryBaseCryptLibSysCallinet_pton.c CryptoPkgLibraryIncludecryptodso_conf.h CryptoPkgLibraryIncludeopensslopensslconf.h MdeModulePkg/Library/LzmaCustomDecompressLib OvmfPkg" | tr " " "\n" >> $RELEASE_NOTES
+          echo "" >> $RELEASE_NOTES
+          echo "The EDK II open source project uses content from upstream projects as git submodules that are covered by additional licenses." >> $RELEASE_NOTES
+          echo "[BaseTools/Source/C/BrotliCompress/brotli](https://github.com/google/brotli/blob/666c3280cc11dc433c303d79a83d4ffbdd12cc8d/LICENSE)" >> $RELEASE_NOTES
+          echo "[CryptoPkg/Library/OpensslLib/openssl](https://github.com/openssl/openssl/blob/e2e09d9fba1187f8d6aafaa34d4172f56f1ffb72/LICENSE)" >> $RELEASE_NOTES
+          echo "[CryptoPkg/Library/MbedTlsLib/mbedtls](https://github.com/Mbed-TLS/mbedtls/blob/8c89224991adff88d53cd380f42a2baa36f91454/LICENSE)" >> $RELEASE_NOTES
+          echo "[MdeModulePkg/Library/BrotliCustomDecompressLib/brotli](https://github.com/google/brotli/blob/666c3280cc11dc433c303d79a83d4ffbdd12cc8d/LICENSE)" >> $RELEASE_NOTES
+          echo "[MdeModulePkg/Universal/RegularExpressionDxe/oniguruma](https://github.com/kkos/oniguruma/blob/abfc8ff81df4067f309032467785e06975678f0d/COPYING)" >> $RELEASE_NOTES
+          echo "[UnitTestFrameworkPkg/Library/CmockaLib/cmocka](https://github.com/tianocore/edk2-cmocka/blob/f5e2cd77c88d9f792562888d2b70c5a396bfbf7a/COPYING)" >> $RELEASE_NOTES
+          echo "[UnitTestFrameworkPkg/Library/GoogleTestLib/googletest](https://github.com/google/googletest/blob/86add13493e5c881d7e4ba77fb91c1f57752b3a4/LICENSE)" >> $RELEASE_NOTES
+          echo "[UnitTestFrameworkPkg/Library/SubhookLib/subhook](https://github.com/tianocore/edk2-subhook/blob/83d4e1ebef3588fae48b69a7352cc21801cb70bc/LICENSE.txt)" >> $RELEASE_NOTES
+          echo "[RedfishPkg/Library/JsonLib/jansson](https://github.com/akheron/jansson/blob/2882ead5bb90cf12a01b07b2c2361e24960fae02/LICENSE)" >> $RELEASE_NOTES
+          echo "[MdePkg/Library/BaseFdtLib/libfdt](https://github.com/devicetree-org/pylibfdt/blob/f39368a217496d32c4091a2dba4045b60649e3a5/BSD-2-Clause)" >> $RELEASE_NOTES
+          echo "[MdePkg/Library/MipiSysTLib/mipisyst](https://github.com/MIPI-Alliance/public-mipi-sys-t/blob/aae857d0d05ac65152ed24992a4acd834a0a107c/LICENSE)" >> $RELEASE_NOTES
+          echo "[SecurityPkg/DeviceSecurity/SpdmLib/libspdm](https://github.com/DMTF/libspdm/blob/main/LICENSE.md)" >> $RELEASE_NOTES
+          gh release create "ch-fw-"${{ inputs.edk2_release }} --latest=false --title "cloud hypervisor edk2 fw "${{ inputs.edk2_release }} --notes-file $RELEASE_NOTES binary-fw/CLOUDHV.fd
