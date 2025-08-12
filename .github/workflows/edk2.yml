@@ -17,7 +17,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout edk2 repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: tianocore/edk2
           submodules: recursive
