@@ -10,6 +10,9 @@ on:
         type: string
         default: "edk2-stable2025XX"  
 jobs:
+  permissions:
+    contents: read
+    packages: write
   build:
     runs-on: ubuntu-latest
     defaults:
