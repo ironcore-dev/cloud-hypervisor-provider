@@ -19,8 +19,8 @@ require (
 	github.com/onsi/ginkgo/v2 v2.25.2
 	github.com/onsi/gomega v1.38.2
 	github.com/opencontainers/image-spec v1.1.1
-	github.com/spf13/cobra v1.9.1
-	github.com/spf13/pflag v1.0.7
+	github.com/spf13/cobra v1.10.1
+	github.com/spf13/pflag v1.0.9
 	golang.org/x/sync v0.16.0
 	google.golang.org/grpc v1.75.0
 	k8s.io/api v0.33.4
