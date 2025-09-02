@@ -194,7 +194,7 @@ func (r *MachineReconciler) getMachineState(
 	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
 	vm, err := r.vmm.GetVM(ctx, apiSocket)
 	if err != nil {
-		if errors.Is(err, vmm.ErrVmNotCreated) || errors.Is(err, vmm.ErrNotFound) {
+		if errors.Is(err, vmm.ErrVmNotCreated) || errors.Is(err, vmm.ErrNotFound) || errors.Is(err, vmm.ErrBrokenSocket) {
 			return client.Shutdown, nil
 		}
 		return client.Shutdown, err
@@ -268,7 +268,7 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 	}
 
 	if socket := ptr.Deref(machine.Spec.ApiSocketPath, ""); socket != "" {
-		r.vmm.FreeApiSocket(socket)
+		r.vmm.FreeApiSocket(ctx, socket)
 	}
 
 	if err := os.RemoveAll(r.paths.MachineDir(machine.ID)); err != nil {

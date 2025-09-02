@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
@@ -96,6 +97,8 @@ var (
 	ErrResourceVersionNotLatest = errors.New("resourceVersion is not latest")
 	ErrVmInitialized            = errors.New("vm already initialized")
 
+	ErrBrokenSocket = errors.New("broken socket")
+
 	ErrVmNotCreated = errors.New("vm is not created")
 )
 
@@ -115,7 +118,7 @@ func (m *Manager) ping(ctx context.Context, instanceID string) error {
 
 	ping, err := apiClient.GetVmmPingWithResponse(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to ping vmm: %w", err)
+		return wrapIfSocketClosed(fmt.Errorf("failed to ping vmm: %w", err))
 	}
 
 	if ping.JSON200 != nil {
@@ -143,11 +146,22 @@ func (m *Manager) GetFreeApiSocket() (*string, error) {
 	return ptr.To(socket), nil
 }
 
-func (m *Manager) FreeApiSocket(socket string) {
+func (m *Manager) FreeApiSocket(ctx context.Context, socket string) {
 	m.freeMu.Lock()
 	defer m.freeMu.Unlock()
 
+	if err := m.ping(ctx, socket); err != nil {
+		m.log.Info("Failed to ping socket: discard socket", "socket", socket)
+		return
+	}
 	m.free.Insert(socket)
+}
+
+func wrapIfSocketClosed(err error) error {
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return fmt.Errorf("%w: %w", ErrBrokenSocket, err)
+	}
+	return err
 }
 
 func (m *Manager) GetVM(ctx context.Context, instanceID string) (*client.VmInfo, error) {
@@ -164,7 +178,7 @@ func (m *Manager) GetVM(ctx context.Context, instanceID string) (*client.VmInfo,
 	log.V(2).Info("Getting vm")
 	resp, err := apiClient.GetVmInfoWithResponse(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get vm: %w", err)
+		return nil, wrapIfSocketClosed(fmt.Errorf("failed to get vm: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
@@ -271,7 +285,7 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 		Platform: platform,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to get vm: %w", err)
+		return wrapIfSocketClosed(fmt.Errorf("failed to get vm: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
@@ -297,7 +311,7 @@ func (m *Manager) RemoveDevice(ctx context.Context, instanceID string, deviceID 
 		Id: ptr.To(deviceID),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to remove device: %w", err)
+		return wrapIfSocketClosed(fmt.Errorf("failed to remove device: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
@@ -329,7 +343,7 @@ func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.Networ
 		Path: nic.Path,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to remove device: %w", err)
+		return wrapIfSocketClosed(fmt.Errorf("failed to remove device: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
@@ -375,7 +389,7 @@ func (m *Manager) AddDisk(ctx context.Context, instanceID string, volume *api.Vo
 
 	resp, err := apiClient.PutVmAddDiskWithResponse(ctx, disk)
 	if err != nil {
-		return fmt.Errorf("failed to add device: %w", err)
+		return wrapIfSocketClosed(fmt.Errorf("failed to add device: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
@@ -400,7 +414,7 @@ func (m *Manager) PowerOn(ctx context.Context, instanceID string) error {
 
 	resp, err := apiClient.BootVMWithResponse(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to boot vm: %w", err)
+		return wrapIfSocketClosed(fmt.Errorf("failed to boot vm: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
@@ -425,7 +439,7 @@ func (m *Manager) PowerOff(ctx context.Context, instanceID string) error {
 
 	resp, err := apiClient.ShutdownVMWithResponse(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to shutdown vm: %w", err)
+		return wrapIfSocketClosed(fmt.Errorf("failed to shutdown vm: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
@@ -450,7 +464,7 @@ func (m *Manager) Delete(ctx context.Context, instanceID string) error {
 
 	resp, err := apiClient.DeleteVMWithResponse(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to delete vm: %w", err)
+		return wrapIfSocketClosed(fmt.Errorf("failed to delete vm: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
