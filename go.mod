@@ -22,7 +22,7 @@ require (
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/pflag v1.0.9
 	golang.org/x/sync v0.16.0
-	google.golang.org/grpc v1.75.0
+	google.golang.org/grpc v1.75.1
 	k8s.io/api v0.33.4
 	k8s.io/apimachinery v0.33.4
 	k8s.io/client-go v0.33.4
