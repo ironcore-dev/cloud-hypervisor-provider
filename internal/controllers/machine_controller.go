@@ -16,7 +16,6 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
-	ociImage "github.com/ironcore-dev/cloud-hypervisor-provider/internal/oci"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/osutils"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
@@ -24,6 +23,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
 	"github.com/ironcore-dev/provider-utils/eventutils/event"
 	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
+	ociutils "github.com/ironcore-dev/provider-utils/ociutils/oci"
 	"github.com/ironcore-dev/provider-utils/storeutils/store"
 	"github.com/ironcore-dev/provider-utils/storeutils/utils"
 	corev1 "k8s.io/api/core/v1"
@@ -37,7 +37,7 @@ const (
 )
 
 type MachineReconcilerOptions struct {
-	ImageCache ociImage.Cache
+	ImageCache ociutils.Cache
 	Raw        raw.Raw
 
 	Paths host.Paths
@@ -68,7 +68,7 @@ func NewMachineReconciler(
 		),
 		machines:               machines,
 		machineEvents:          machineEvents,
-		EventRecorder:          eventRecorder,
+		eventRecorder:          eventRecorder,
 		imageCache:             opts.ImageCache,
 		raw:                    opts.Raw,
 		paths:                  opts.Paths,
@@ -82,7 +82,7 @@ type MachineReconciler struct {
 	log   logr.Logger
 	queue workqueue.TypedRateLimitingInterface[string]
 
-	imageCache ociImage.Cache
+	imageCache ociutils.Cache
 	raw        raw.Raw
 
 	paths host.Paths
@@ -95,7 +95,7 @@ type MachineReconciler struct {
 	machines      store.Store[*api.Machine]
 	machineEvents event.Source[*api.Machine]
 
-	recorder.EventRecorder
+	eventRecorder recorder.EventRecorder
 }
 
 func (r *MachineReconciler) Start(ctx context.Context) error {
@@ -104,8 +104,8 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 	// TODO make configurable
 	workerSize := 15
 
-	r.imageCache.AddListener(ociImage.ListenerFuncs{
-		HandlePullDoneFunc: func(evt ociImage.PullDoneEvent) {
+	r.imageCache.AddListener(ociutils.ListenerFuncs{
+		HandlePullDoneFunc: func(evt ociutils.PullDoneEvent) {
 			machines, err := r.machines.List(ctx)
 			if err != nil {
 				log.Error(err, "failed to list machine")
@@ -114,7 +114,7 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 
 			for _, machine := range machines {
 				if ptr.Deref(machine.Spec.Image, "") == evt.Ref {
-					r.Eventf(machine.Metadata, corev1.EventTypeNormal, "PulledImage", "Pulled image %s", *machine.Spec.Image)
+					r.eventRecorder.Eventf(machine.Metadata, corev1.EventTypeNormal, "PulledImage", "Pulled image %s", *machine.Spec.Image)
 					log.V(1).Info("Image pulled: Requeue machines", "Image", evt.Ref, "Machine", machine.ID)
 					r.queue.Add(machine.ID)
 				}
@@ -644,7 +644,7 @@ func (r *MachineReconciler) reconcileImage(
 
 	img, err := r.imageCache.Get(ctx, image)
 	if err != nil {
-		if errors.Is(err, ociImage.ErrImagePulling) {
+		if errors.Is(err, ociutils.ErrImagePulling) {
 			log.V(1).Info("Image not in cache", "image", image)
 			return true, nil
 		}

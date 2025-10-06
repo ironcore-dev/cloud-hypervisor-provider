@@ -16,7 +16,6 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/controllers"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/mcr"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/oci"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/options"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/ceph"
@@ -32,6 +31,8 @@ import (
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
 	"github.com/ironcore-dev/provider-utils/eventutils/event"
 	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
+	ocihostutils "github.com/ironcore-dev/provider-utils/ociutils/host"
+	ociutils "github.com/ironcore-dev/provider-utils/ociutils/oci"
 	hostutils "github.com/ironcore-dev/provider-utils/storeutils/host"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -162,7 +163,14 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	reg, err := remote.DockerRegistry(nil)
+	platform, err := ocihostutils.Platform()
+	if err != nil {
+		setupLog.Error(err, "failed to get host platform: %w", err)
+		return err
+	}
+	setupLog.Info("Current platform", "architecture", platform.Architecture)
+
+	reg, err := remote.DockerRegistryWithPlatform(nil, platform)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize registry")
 		return err
@@ -174,7 +182,7 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	imgCache, err := oci.NewLocalCache(log, reg, ociStore)
+	imgCache, err := ociutils.NewLocalCache(log, reg, ociStore)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize oci manager")
 		return err
