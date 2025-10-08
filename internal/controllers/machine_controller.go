@@ -230,19 +230,23 @@ func getNICStatus(nics []api.NetworkInterfaceStatus, name string) api.NetworkInt
 }
 
 func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, machine *api.Machine) error {
+	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
 
 	state, err := r.getMachineState(ctx, machine)
 	if err != nil {
 		return err
 	}
+	log.V(1).Info("Got Machine state", "state", state)
+
 	if state == client.Running {
 		log.V(1).Info("Power machine off")
-		if err := r.vmm.PowerOff(ctx, machine.ID); !errors.Is(err, vmm.ErrNotFound) {
+		if err := r.vmm.PowerOff(ctx, apiSocket); !errors.Is(err, vmm.ErrNotFound) {
 			return fmt.Errorf("failed to power off machine: %w", err)
 		}
 	}
 
-	if err := r.vmm.Delete(ctx, machine.ID); !errors.Is(err, vmm.ErrNotFound) {
+	log.V(1).Info("Delete machine")
+	if err := r.vmm.Delete(ctx, apiSocket); !errors.Is(err, vmm.ErrNotFound) {
 		return fmt.Errorf("failed to kill VMM: %w", err)
 	}
 
@@ -267,8 +271,8 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 		}
 	}
 
-	if socket := ptr.Deref(machine.Spec.ApiSocketPath, ""); socket != "" {
-		r.vmm.FreeApiSocket(ctx, socket)
+	if apiSocket != "" {
+		r.vmm.FreeApiSocket(ctx, apiSocket)
 	}
 
 	if err := os.RemoveAll(r.paths.MachineDir(machine.ID)); err != nil {
