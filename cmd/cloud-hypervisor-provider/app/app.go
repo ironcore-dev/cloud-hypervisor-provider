@@ -182,7 +182,7 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	imgCache, err := ociutils.NewLocalCache(log, reg, ociStore)
+	imgCache, err := ociutils.NewLocalCache(log, reg, ociStore, nil)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize oci manager")
 		return err

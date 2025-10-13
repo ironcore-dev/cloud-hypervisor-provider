@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -182,7 +183,7 @@ func (m *Manager) GetVM(ctx context.Context, instanceID string) (*client.VmInfo,
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
-		if string(resp.Body) == "Error from API: The VM info is not available: VM is not created" {
+		if strings.Contains(string(resp.Body), "VM is not created") {
 			return nil, ErrVmNotCreated
 		}
 		log.V(1).Info("Failed to get vm", "error", string(resp.Body))

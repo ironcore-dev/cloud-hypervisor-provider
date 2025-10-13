@@ -14,7 +14,7 @@ require (
 	github.com/ironcore-dev/ironcore v0.2.4
 	github.com/ironcore-dev/ironcore-image v0.2.5
 	github.com/ironcore-dev/ironcore-net v0.2.4
-	github.com/ironcore-dev/provider-utils v0.0.0-20251007110633-878bf03490a5
+	github.com/ironcore-dev/provider-utils v0.0.0-20251013151004-d878dabff977
 	github.com/onsi/ginkgo/v2 v2.26.0
 	github.com/onsi/gomega v1.38.2
 	github.com/spf13/cobra v1.10.1
