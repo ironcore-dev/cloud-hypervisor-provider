@@ -15,11 +15,11 @@ require (
 	github.com/ironcore-dev/ironcore-image v0.2.5
 	github.com/ironcore-dev/ironcore-net v0.2.4
 	github.com/ironcore-dev/provider-utils v0.0.0-20251013151004-d878dabff977
-	github.com/onsi/ginkgo/v2 v2.26.0
+	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/pflag v1.0.10
-	golang.org/x/sync v0.17.0
+	golang.org/x/sync v0.18.0
 	google.golang.org/grpc v1.76.0
 	k8s.io/api v0.33.4
 	k8s.io/apimachinery v0.33.4
@@ -92,7 +92,6 @@ require (
 	go.opentelemetry.io/otel v1.37.0 // indirect
 	go.opentelemetry.io/otel/metric v1.37.0 // indirect
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect
-	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
