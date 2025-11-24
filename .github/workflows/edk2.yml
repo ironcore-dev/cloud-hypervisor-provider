@@ -20,7 +20,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout edk2 repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: tianocore/edk2
           submodules: recursive
@@ -37,7 +37,7 @@ jobs:
           ./OvmfPkg/build.sh -a X64 -p OvmfPkg/CloudHv/CloudHvX64.dsc -t GCC5 -b RELEASE 
           ls -la
           find . | grep CLOUDHV.fd
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: binary-fw
           path: Build/CloudHvX64/RELEASE_GCC5/FV/CLOUDHV.fd
@@ -47,7 +47,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           name: binary-fw 
           path: binary-fw 
