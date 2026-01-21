@@ -17,3 +17,7 @@ const (
 const (
 	MachineManager = "cloud-hypervisor-provider"
 )
+
+const (
+	NvidiaGPUResourceIdentifier = "nvidia.com/gpu"
+)

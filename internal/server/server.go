@@ -13,6 +13,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/mcr"
 	"github.com/ironcore-dev/ironcore/broker/common/idgen"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
+	"github.com/ironcore-dev/provider-utils/claimutils/claim"
 	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
 	"github.com/ironcore-dev/provider-utils/storeutils/store"
 	"github.com/ironcore-dev/provider-utils/storeutils/utils"
@@ -30,6 +31,8 @@ type Server struct {
 
 	machineStore store.Store[*api.Machine]
 	eventStore   recorder.EventStore
+
+	resourceClaimer claim.Claimer
 }
 
 type Options struct {
@@ -38,6 +41,8 @@ type Options struct {
 	EventStore recorder.EventStore
 
 	MachineClassRegistry mcr.MachineClassRegistry
+
+	ResourceClaimer claim.Claimer
 }
 
 type nilEventStore struct{}
@@ -67,6 +72,7 @@ func New(store store.Store[*api.Machine], opts Options) (*Server, error) {
 		machineStore:         store,
 		eventStore:           opts.EventStore,
 		machineClassRegistry: opts.MachineClassRegistry,
+		resourceClaimer:      opts.ResourceClaimer,
 	}, nil
 }
 

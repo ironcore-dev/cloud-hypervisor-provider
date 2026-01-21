@@ -21,6 +21,8 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
+	"github.com/ironcore-dev/provider-utils/claimutils/claim"
+	"github.com/ironcore-dev/provider-utils/claimutils/gpu"
 	"github.com/ironcore-dev/provider-utils/eventutils/event"
 	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
 	ociutils "github.com/ironcore-dev/provider-utils/ociutils/oci"
@@ -51,6 +53,7 @@ func NewMachineReconciler(
 	vmm *vmm.Manager,
 	volumePluginManager *volume.PluginManager,
 	nicPlugin networkinterface.Plugin,
+	resourceClaimer claim.Claimer,
 	opts MachineReconcilerOptions,
 ) (*MachineReconciler, error) {
 	if machines == nil {
@@ -75,6 +78,7 @@ func NewMachineReconciler(
 		vmm:                    vmm,
 		VolumePluginManager:    volumePluginManager,
 		networkInterfacePlugin: nicPlugin,
+		resourceClaimer:        resourceClaimer,
 	}, nil
 }
 
@@ -91,6 +95,7 @@ type MachineReconciler struct {
 
 	VolumePluginManager    *volume.PluginManager
 	networkInterfacePlugin networkinterface.Plugin
+	resourceClaimer        claim.Claimer
 
 	machines      store.Store[*api.Machine]
 	machineEvents event.Source[*api.Machine]
@@ -142,7 +147,7 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 		r.queue.ShutDown()
 	}()
 
-	for i := 0; i < workerSize; i++ {
+	for range workerSize {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -250,6 +255,14 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 		if !errors.Is(err, vmm.ErrNotFound) {
 			return fmt.Errorf("failed to delete machine: %w", err)
 		}
+	}
+
+	claims := claim.Claims{}
+
+	if len(machine.Spec.GpuPciAddresses) > 0 {
+		claims["nvidia.com/gpu"] = gpu.NewGPUClaim(machine.Spec.GpuPciAddresses)
+
+		r.resourceClaimer.Release(ctx, claims)
 	}
 
 	log.V(1).Info("Delete volumes")

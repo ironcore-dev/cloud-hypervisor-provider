@@ -264,6 +264,12 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 		})
 	}
 
+	for _, gpuPciAddress := range machine.Spec.GpuPciAddresses {
+		dev = append(dev, client.DeviceConfig{
+			Path: fmt.Sprintf("/sys/bus/pci/devices/%d:%d:%d.%d", gpuPciAddress.Bus, gpuPciAddress.Domain, gpuPciAddress.Slot, gpuPciAddress.Function),
+		})
+	}
+
 	log.V(2).Info("Creating vm")
 	resp, err := apiClient.CreateVMWithResponse(ctx, client.CreateVMJSONRequestBody{
 		Cpus: &client.CpusConfig{

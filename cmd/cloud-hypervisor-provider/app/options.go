@@ -13,20 +13,21 @@ type MachineClass struct {
 	Name        string
 	Cpu         int64
 	MemoryBytes int64
+	NvidiaGpu   int64
 }
 type MachineClassOptions []MachineClass
 
 func (ml *MachineClassOptions) String() string {
 	var parts []string
 	for _, m := range *ml {
-		parts = append(parts, fmt.Sprintf("%s,%d,%d", m.Name, m.Cpu, m.MemoryBytes))
+		parts = append(parts, fmt.Sprintf("%s,%d,%d,%d", m.Name, m.Cpu, m.MemoryBytes, m.NvidiaGpu))
 	}
 	return strings.Join(parts, "; ")
 }
 
 func (ml *MachineClassOptions) Set(value string) error {
 	parts := strings.Split(value, ",")
-	if len(parts) != 3 {
+	if len(parts) != 4 {
 		return fmt.Errorf("invalid machine format: expected name,cpu,memory")
 	}
 
@@ -40,10 +41,16 @@ func (ml *MachineClassOptions) Set(value string) error {
 		return fmt.Errorf("invalid Memory value: %s", parts[2])
 	}
 
+	nvidiaGpu, err := strconv.ParseInt(parts[3], 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid nvidia gpu value: %s", parts[3])
+	}
+
 	*ml = append(*ml, MachineClass{
 		Name:        parts[0],
 		Cpu:         cpuMillis,
 		MemoryBytes: memoryBytes,
+		NvidiaGpu:   nvidiaGpu,
 	})
 
 	return nil

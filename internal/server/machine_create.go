@@ -10,8 +10,12 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
+	"github.com/ironcore-dev/ironcore/api/core/v1alpha1"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
 	apiutils "github.com/ironcore-dev/provider-utils/apiutils/api"
+	"github.com/ironcore-dev/provider-utils/claimutils/gpu"
+	"github.com/ironcore-dev/provider-utils/claimutils/pci"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func (s *Server) createMachineFromIRIMachine(
@@ -61,6 +65,20 @@ func (s *Server) createMachineFromIRIMachine(
 		networkInterfaces = append(networkInterfaces, networkInterfaceSpec)
 	}
 
+	pciAddresses := make([]pci.Address, 0, class.NvidiaGpu)
+
+	resourcesToClaim := v1alpha1.ResourceList{
+		api.NvidiaGPUResourceIdentifier: *resource.NewQuantity(int64(class.NvidiaGpu), resource.DecimalSI),
+	}
+
+	claimedResources, err := s.resourceClaimer.Claim(ctx, resourcesToClaim)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to claim resources %w", err)
+	}
+
+	pciAddresses = append(pciAddresses, claimedResources[api.NvidiaGPUResourceIdentifier].(gpu.Claim).PCIAddresses()...)
+
 	machine := &api.Machine{
 		Metadata: apiutils.Metadata{
 			ID: s.idGen.Generate(),
@@ -69,6 +87,7 @@ func (s *Server) createMachineFromIRIMachine(
 			Power:             power,
 			Cpu:               int64(math.Max(float64(class.Cpu), 1)),
 			MemoryBytes:       class.MemoryBytes,
+			GpuPciAddresses:   pciAddresses,
 			Volumes:           volumes,
 			Ignition:          iriMachine.Spec.IgnitionData,
 			NetworkInterfaces: networkInterfaces,

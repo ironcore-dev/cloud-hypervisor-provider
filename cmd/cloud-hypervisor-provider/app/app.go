@@ -29,6 +29,9 @@ import (
 	"github.com/ironcore-dev/ironcore/broker/common"
 	commongrpc "github.com/ironcore-dev/ironcore/broker/common/grpc"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
+	"github.com/ironcore-dev/provider-utils/claimutils/claim"
+	"github.com/ironcore-dev/provider-utils/claimutils/gpu"
+	"github.com/ironcore-dev/provider-utils/claimutils/pci"
 	"github.com/ironcore-dev/provider-utils/eventutils/event"
 	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
 	ocihostutils "github.com/ironcore-dev/provider-utils/ociutils/host"
@@ -274,6 +277,21 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
+	nvidiaGpuReader, err := pci.NewReader(log, pci.VendorNvidia, pci.Class3DController)
+
+	if err != nil {
+		setupLog.Error(err, "failed to initialize nvidia pci reader")
+		return err
+	}
+
+	gpuClaimPlugin := gpu.NewGPUClaimPlugin(log, "nvidia-gpu", nvidiaGpuReader, []pci.Address{})
+	resourceClaimer, err := claim.NewResourceClaimer(log, gpuClaimPlugin)
+
+	if err != nil {
+		setupLog.Error(err, "failed to initialize resource claimer")
+		return err
+	}
+
 	eventRecorder := recorder.NewEventStore(log, recorder.EventStoreOptions{})
 	machineReconciler, err := controllers.NewMachineReconciler(
 		log.WithName("machine-reconciler"),
@@ -283,6 +301,7 @@ func Run(ctx context.Context, opts Options) error {
 		virtualMachineManager,
 		pluginManager,
 		nicPlugin,
+		resourceClaimer,
 		controllers.MachineReconcilerOptions{
 			ImageCache: imgCache,
 			Raw:        rawInst,
@@ -297,12 +316,24 @@ func Run(ctx context.Context, opts Options) error {
 	srv, err := server.New(machineStore, server.Options{
 		EventStore:           eventRecorder,
 		MachineClassRegistry: classRegistry,
+		ResourceClaimer:      resourceClaimer,
 	})
+
 	if err != nil {
 		return fmt.Errorf("error creating server: %w", err)
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		setupLog.Info("Starting resource claimer")
+		if err := resourceClaimer.Start(ctx); err != nil {
+			setupLog.Error(err, "failed to start resource claimer loop")
+			return err
+		}
+		return nil
+	})
+
 	g.Go(func() error {
 		setupLog.Info("Starting oci cache")
 		if err := imgCache.Start(ctx); err != nil {

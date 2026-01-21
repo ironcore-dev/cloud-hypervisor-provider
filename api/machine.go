@@ -7,6 +7,7 @@ import (
 	"time"
 
 	apiutils "github.com/ironcore-dev/provider-utils/apiutils/api"
+	"github.com/ironcore-dev/provider-utils/claimutils/pci"
 )
 
 type Machine struct {
@@ -23,6 +24,8 @@ type MachineSpec struct {
 
 	Cpu         int64 `json:"cpuMillis"`
 	MemoryBytes int64 `json:"memoryBytes"`
+
+	GpuPciAddresses []pci.Address `json:"gpuPciAddresses"`
 
 	Image    *string `json:"image"`
 	Ignition []byte  `json:"ignition"`

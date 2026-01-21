@@ -16,6 +16,7 @@ type MachineClass struct {
 	Name        string
 	Cpu         int64
 	MemoryBytes int64
+	NvidiaGpu   int64
 }
 
 func NewMachineClassRegistry(classes []MachineClass) (*Mcr, error) {
