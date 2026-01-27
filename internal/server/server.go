@@ -10,7 +10,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/mcr"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/machineclasses"
 	"github.com/ironcore-dev/ironcore/broker/common/idgen"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
 	"github.com/ironcore-dev/provider-utils/claimutils/claim"
@@ -27,7 +27,7 @@ type Server struct {
 
 	iri.UnimplementedMachineRuntimeServer
 
-	machineClassRegistry mcr.MachineClassRegistry
+	machineClassRegistry machineclasses.Registry
 
 	machineStore store.Store[*api.Machine]
 	eventStore   recorder.EventStore
@@ -40,7 +40,7 @@ type Options struct {
 
 	EventStore recorder.EventStore
 
-	MachineClassRegistry mcr.MachineClassRegistry
+	MachineClassRegistry machineclasses.Registry
 
 	ResourceClaimer claim.Claimer
 }

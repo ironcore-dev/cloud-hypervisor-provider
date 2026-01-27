@@ -14,7 +14,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/cmd/cloud-hypervisor-provider/app"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/mcr"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/machineclasses"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/server"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/strategy"
 	iriv1alpha1 "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
@@ -83,7 +83,7 @@ var _ = BeforeEach(func() {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	classRegistry, err := mcr.NewMachineClassRegistry([]mcr.MachineClass{
+	classRegistry, err := machineclasses.NewRegistry([]machineclasses.MachineClass{
 		{
 			Name:        machineClassName,
 			Cpu:         1000,

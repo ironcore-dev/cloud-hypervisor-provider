@@ -15,7 +15,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/controllers"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/mcr"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/machineclasses"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/options"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/ceph"
@@ -149,12 +149,12 @@ func Run(ctx context.Context, opts Options) error {
 	log := ctrl.LoggerFrom(ctx)
 	setupLog := log.WithName("setup")
 
-	var classes []mcr.MachineClass
+	var classes []machineclasses.MachineClass
 	for _, class := range opts.MachineClasses {
-		classes = append(classes, mcr.MachineClass(class))
+		classes = append(classes, machineclasses.MachineClass(class))
 	}
 
-	classRegistry, err := mcr.NewMachineClassRegistry(classes)
+	classRegistry, err := machineclasses.NewRegistry(classes)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize provider host")
 		return err

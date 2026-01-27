@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2023 SAP SE or an SAP affiliate company and IronCore contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package mcr
+package machineclasses
 
 import (
 	"fmt"
 )
 
-type MachineClassRegistry interface {
+type Registry interface {
 	Get(volumeClassName string) (MachineClass, bool)
 	List() []MachineClass
 }
@@ -19,8 +19,8 @@ type MachineClass struct {
 	NvidiaGpu   int64
 }
 
-func NewMachineClassRegistry(classes []MachineClass) (*Mcr, error) {
-	registry := Mcr{
+func NewRegistry(classes []MachineClass) (*MachineClassRegistry, error) {
+	registry := MachineClassRegistry{
 		classes: map[string]MachineClass{},
 	}
 
@@ -34,16 +34,16 @@ func NewMachineClassRegistry(classes []MachineClass) (*Mcr, error) {
 	return &registry, nil
 }
 
-type Mcr struct {
+type MachineClassRegistry struct {
 	classes map[string]MachineClass
 }
 
-func (m *Mcr) Get(machineClassName string) (MachineClass, bool) {
+func (m *MachineClassRegistry) Get(machineClassName string) (MachineClass, bool) {
 	class, found := m.classes[machineClassName]
 	return class, found
 }
 
-func (m *Mcr) List() []MachineClass {
+func (m *MachineClassRegistry) List() []MachineClass {
 	var classes []MachineClass
 	for name := range m.classes {
 		class := m.classes[name]
