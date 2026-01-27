@@ -60,7 +60,7 @@ type Options struct {
 	RootDir         string
 	MachineStoreDir string
 
-	MachineClasses MachineClassOptions
+	MachineClassesFile string
 
 	CloudHypervisorSocketsPath  string
 	CloudHypervisorFirmwarePath string
@@ -108,11 +108,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 		"Path to the cloud-hypervisor firmware.",
 	)
 
-	fs.Var(
-		&o.MachineClasses,
-		"machine-class",
-		"Supported machine classes (format: name,cpu,memory)",
-	)
+	fs.StringVar(&o.MachineClassesFile, "machine-classes", filepath.Join(".cloud-hypervisor-provider/machine-classes.json"), "Path to the file containing supported machine classes.")
 
 	o.NicPlugin = options.NewDefaultOptions()
 	o.NicPlugin.AddFlags(fs)
@@ -149,14 +145,9 @@ func Run(ctx context.Context, opts Options) error {
 	log := ctrl.LoggerFrom(ctx)
 	setupLog := log.WithName("setup")
 
-	var classes []machineclasses.MachineClass
-	for _, class := range opts.MachineClasses {
-		classes = append(classes, machineclasses.MachineClass(class))
-	}
-
-	classRegistry, err := machineclasses.NewRegistry(classes)
+	classRegistry, err := machineclasses.NewRegistryFromFile(opts.MachineClassesFile)
 	if err != nil {
-		setupLog.Error(err, "failed to initialize provider host")
+		setupLog.Error(err, "failed to initialize machine class registry")
 		return err
 	}
 
