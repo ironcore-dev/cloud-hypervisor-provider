@@ -225,12 +225,6 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 	}
 
 	var disks []client.DiskConfig
-	if ptr.Deref(machine.Spec.Image, "") != "" {
-		disks = append(disks, client.DiskConfig{
-			Path: ptr.To(m.paths.MachineRootFSFile(machine.ID)),
-		})
-	}
-
 	for _, vol := range machine.Status.VolumeStatus {
 		if vol.State != api.VolumeStatePrepared {
 			continue

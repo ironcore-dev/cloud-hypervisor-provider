@@ -19,7 +19,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/options"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/ceph"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/emptydisk"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/localdisk"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/server"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/strategy"
@@ -208,7 +208,7 @@ func Run(ctx context.Context, opts Options) error {
 	pluginManager := volume.NewPluginManager()
 	if err := pluginManager.InitPlugins(hostPaths, []volume.Plugin{
 		ceph.NewPlugin(qmpProvider),
-		emptydisk.NewPlugin(rawInst),
+		localdisk.NewPlugin(rawInst, imgCache),
 	}); err != nil {
 		setupLog.Error(err, "failed to initialize plugins")
 		return err
@@ -366,6 +366,11 @@ func RunGRPCServer(ctx context.Context, setupLog, log logr.Logger, srv *server.S
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
+	defer func() {
+		if err := l.Close(); err != nil {
+			setupLog.Error(err, "failed to close listener")
+		}
+	}()
 
 	err = os.Chmod(address, 0666)
 	if err != nil {

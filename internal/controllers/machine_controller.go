@@ -16,7 +16,6 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/osutils"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
@@ -113,8 +112,8 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 			}
 
 			for _, machine := range machines {
-				if ptr.Deref(machine.Spec.Image, "") == evt.Ref {
-					r.eventRecorder.Eventf(machine.Metadata, corev1.EventTypeNormal, "PulledImage", "Pulled image %s", *machine.Spec.Image)
+				if api.IsImageReferenced(machine, evt.Ref) {
+					r.eventRecorder.Eventf(machine.Metadata, corev1.EventTypeNormal, "ImagePullSucceeded", "Pulled image %s", evt.Ref)
 					log.V(1).Info("Image pulled: Requeue machines", "Image", evt.Ref, "Machine", machine.ID)
 					r.queue.Add(machine.ID)
 				}
@@ -240,8 +239,10 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 
 	if state == client.Running {
 		log.V(1).Info("Power machine off")
-		if err := r.vmm.PowerOff(ctx, apiSocket); !errors.Is(err, vmm.ErrNotFound) {
-			return fmt.Errorf("failed to power off machine: %w", err)
+		if err := r.vmm.PowerOff(ctx, apiSocket); err != nil {
+			if !errors.Is(err, vmm.ErrNotFound) {
+				return fmt.Errorf("failed to power off machine: %w", err)
+			}
 		}
 	}
 
@@ -544,8 +545,19 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 	}
 	log.V(2).Info("Successfully made machine directories")
 
-	if requeue, err := r.reconcileImage(ctx, log, machine); err != nil || requeue {
-		return err
+	if bootImage := api.HasBootImage(machine); bootImage != nil {
+		log.V(1).Info("Boot image referenced", "image", bootImage)
+
+		_, err := r.imageCache.Get(ctx, *bootImage)
+		if err != nil {
+			if errors.Is(err, ociutils.ErrImagePulling) {
+				log.V(1).Info("Image is pulling, reconcile later")
+				r.eventRecorder.Eventf(machine.Metadata, corev1.EventTypeNormal, "PullingImage", "Pulling image in progress")
+				return nil
+			}
+			return err
+		}
+		log.V(2).Info("Image is present")
 	}
 
 	if machine.Spec.ApiSocketPath == nil {
@@ -635,43 +647,4 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 
 	log.V(1).Info("Reconciled machine successfully ", "machine", machine.ID)
 	return nil
-}
-
-func (r *MachineReconciler) reconcileImage(
-	ctx context.Context,
-	log logr.Logger,
-	machine *api.Machine,
-) (bool, error) {
-	image := ptr.Deref(machine.Spec.Image, "")
-	if image == "" {
-		log.V(2).Info("No image in machine set, skip fetch")
-		return false, nil
-	}
-
-	img, err := r.imageCache.Get(ctx, image)
-	if err != nil {
-		if errors.Is(err, ociutils.ErrImagePulling) {
-			log.V(1).Info("Image not in cache", "image", image)
-			return true, nil
-		}
-
-		return false, fmt.Errorf("failed to get image from cache: %w", err)
-	}
-
-	log.V(2).Info("Image in cache", "image", image)
-	rootFSFile := r.paths.MachineRootFSFile(machine.ID)
-	ok, err := osutils.RegularFileExists(rootFSFile)
-	if err != nil {
-		return false, err
-	}
-	if !ok {
-		if err := r.raw.Create(rootFSFile, raw.WithSourceFile(img.RootFS.Path)); err != nil {
-			return false, fmt.Errorf("error creating root fs disk: %w", err)
-		}
-		//if err := os.Chmod(rootFSFile, 0666); err != nil {
-		//	return false, fmt.Errorf("error changing root fs disk mode: %w", err)
-		//}
-	}
-
-	return false, nil
 }
