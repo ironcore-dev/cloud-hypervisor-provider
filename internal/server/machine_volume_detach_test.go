@@ -28,14 +28,14 @@ var _ = Describe("DetachVolume", func() {
 					Volumes: []*iri.Volume{
 						{
 							Name: "disk-1",
-							EmptyDisk: &iri.EmptyDisk{
+							LocalDisk: &iri.LocalDisk{
 								SizeBytes: emptyDiskSize,
 							},
 							Device: "oda",
 						},
 						{
 							Name: "disk-2",
-							EmptyDisk: &iri.EmptyDisk{
+							LocalDisk: &iri.LocalDisk{
 								SizeBytes: emptyDiskSize,
 							},
 							Device: "odb",

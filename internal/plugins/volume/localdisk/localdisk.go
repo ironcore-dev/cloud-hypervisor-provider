@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2023 SAP SE or an SAP affiliate company and IronCore contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package emptydisk
+package localdisk
 
 import (
 	"context"
@@ -13,9 +13,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
+	ociutils "github.com/ironcore-dev/provider-utils/ociutils/oci"
 	utilstrings "k8s.io/utils/strings"
 )
 
@@ -28,11 +30,14 @@ const (
 type plugin struct {
 	host volume.Host
 	raw  raw.Raw
+
+	imageCache ociutils.Cache
 }
 
-func NewPlugin(raw raw.Raw) volume.Plugin {
+func NewPlugin(raw raw.Raw, osImages ociutils.Cache) volume.Plugin {
 	return &plugin{
-		raw: raw,
+		raw:        raw,
+		imageCache: osImages,
 	}
 }
 
@@ -46,30 +51,31 @@ func (p *plugin) Name() string {
 }
 
 func (p *plugin) GetBackingVolumeID(volume *api.VolumeSpec) (string, error) {
-	if volume.EmptyDisk == nil {
-		return "", fmt.Errorf("volume does not specify an EmptyDisk")
+	if volume.LocalDisk == nil {
+		return "", fmt.Errorf("volume does not specify an LocalDisk")
 	}
 	return volume.Name, nil
 }
 
 func (p *plugin) CanSupport(volume *api.VolumeSpec) bool {
-	return volume.EmptyDisk != nil
+	return volume.LocalDisk != nil
 }
 
 func (p *plugin) diskFilename(computeVolumeName string, machineID string) string {
-	return filepath.Join(
-		p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), computeVolumeName),
-		"disk.raw",
-	)
+	return filepath.Join(p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), computeVolumeName), "disk.raw")
 }
 
-func (p *plugin) Apply(_ context.Context, spec *api.VolumeSpec, machineID string) (*api.VolumeStatus, error) {
+func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machineID string) (*api.VolumeStatus, error) {
+	log := logr.FromContextOrDiscard(ctx)
+
 	volumeDir := p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), spec.Name)
+
+	log.V(2).Info("Creating volume directory", "directory", volumeDir)
 	if err := os.MkdirAll(volumeDir, os.ModePerm); err != nil {
 		return nil, err
 	}
 
-	size := spec.EmptyDisk.Size
+	size := spec.LocalDisk.Size
 	if size == 0 {
 		size = defaultSize
 	}
@@ -80,7 +86,26 @@ func (p *plugin) Apply(_ context.Context, spec *api.VolumeSpec, machineID string
 			return nil, fmt.Errorf("error stat-ing disk: %w", err)
 		}
 
-		if err := p.raw.Create(diskFilename, raw.WithSize(size)); err != nil {
+		var createOption raw.CreateOption
+		if imgRef := spec.LocalDisk.Image; imgRef != nil {
+			img, err := p.imageCache.Get(ctx, *imgRef)
+			if err != nil {
+				return nil, err
+			}
+
+			log.V(2).Info("Create disk with rootfs from img", "file", img.RootFS.Path)
+			createOption = raw.WithSourceFile(img.RootFS.Path)
+		} else {
+			size := spec.LocalDisk.Size
+			if size == 0 {
+				size = defaultSize
+			}
+
+			log.V(2).Info("Create disk", "size", size)
+			createOption = raw.WithSize(size)
+		}
+
+		if err := p.raw.Create(diskFilename, createOption); err != nil {
 			return nil, fmt.Errorf("error creating disk %w", err)
 		}
 		if err := os.Chmod(diskFilename, os.FileMode(0666)); err != nil {

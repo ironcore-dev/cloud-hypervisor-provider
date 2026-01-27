@@ -27,9 +27,6 @@ var _ = Describe("ListMachine", func() {
 					},
 					Spec: &iri.MachineSpec{
 						Power: iri.Power_POWER_ON,
-						Image: &iri.ImageSpec{
-							Image: "example.org/foo:latest",
-						},
 						Class: machineClassName,
 						NetworkInterfaces: []*iri.NetworkInterface{
 							{

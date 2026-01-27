@@ -34,7 +34,7 @@ var _ = Describe("AttachVolume", func() {
 
 		volume := &iri.Volume{
 			Name: "disk-1",
-			EmptyDisk: &iri.EmptyDisk{
+			LocalDisk: &iri.LocalDisk{
 				SizeBytes: emptyDiskSize,
 			},
 			Device: "oda",
@@ -57,8 +57,8 @@ var _ = Describe("AttachVolume", func() {
 		Expect(updatedMachine.Machines[0].Spec.Volumes).To(HaveLen(1))
 		Expect(updatedMachine.Machines[0].Spec.Volumes).To(ContainElement(
 			WithTransform(func(v *iri.Volume) string {
-				return fmt.Sprintf("%s-%s-%d", v.Name, v.Device, v.EmptyDisk.SizeBytes)
-			}, Equal(fmt.Sprintf("%s-%s-%d", volume.Name, volume.Device, volume.EmptyDisk.SizeBytes))),
+				return fmt.Sprintf("%s-%s-%d", v.Name, v.Device, v.LocalDisk.SizeBytes)
+			}, Equal(fmt.Sprintf("%s-%s-%d", volume.Name, volume.Device, volume.LocalDisk.SizeBytes))),
 		))
 	})
 })

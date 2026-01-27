@@ -7,6 +7,7 @@ import (
 	"time"
 
 	apiutils "github.com/ironcore-dev/provider-utils/apiutils/api"
+	"k8s.io/utils/ptr"
 )
 
 type Machine struct {
@@ -24,8 +25,7 @@ type MachineSpec struct {
 	Cpu         int64 `json:"cpuMillis"`
 	MemoryBytes int64 `json:"memoryBytes"`
 
-	Image    *string `json:"image"`
-	Ignition []byte  `json:"ignition"`
+	Ignition []byte `json:"ignition"`
 
 	Volumes           []*VolumeSpec           `json:"volumes"`
 	NetworkInterfaces []*NetworkInterfaceSpec `json:"networkInterfaces"`
@@ -60,7 +60,7 @@ const (
 type VolumeSpec struct {
 	Name       string            `json:"name"`
 	Device     string            `json:"device"`
-	EmptyDisk  *EmptyDiskSpec    `json:"emptyDisk,omitempty"`
+	LocalDisk  *LocalDiskSpec    `json:"LocalDisk,omitempty"`
 	Connection *VolumeConnection `json:"cephDisk,omitempty"`
 	DeletedAt  *time.Time        `json:"deletedAt,omitempty"`
 }
@@ -74,8 +74,9 @@ type VolumeStatus struct {
 	Size   int64       `json:"size,omitempty"`
 }
 
-type EmptyDiskSpec struct {
-	Size int64 `json:"size"`
+type LocalDiskSpec struct {
+	Size  int64   `json:"size"`
+	Image *string `json:"image"`
 }
 
 type VolumeConnection struct {
@@ -131,3 +132,25 @@ const (
 	NetworkInterfacePCIType NetworkInterfaceType = "pci"
 	NetworkInterfaceTAPType NetworkInterfaceType = "tap"
 )
+
+func HasBootImage(machine *Machine) *string {
+	for _, volume := range machine.Spec.Volumes {
+		if volume.LocalDisk == nil {
+			continue
+		}
+
+		if volume.LocalDisk.Image != nil {
+			return volume.LocalDisk.Image
+		}
+	}
+	return nil
+}
+
+func IsImageReferenced(machine *Machine, image string) bool {
+	bootImage := HasBootImage(machine)
+	if bootImage == nil {
+		return false
+	}
+
+	return ptr.Deref(bootImage, "") == image
+}
