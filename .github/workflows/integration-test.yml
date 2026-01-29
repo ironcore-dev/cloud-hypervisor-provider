@@ -31,8 +31,11 @@ jobs:
           ca-certificates libc-bin gcc cpu-checker
           sudo update-ca-certificates
           sudo rm -rf /var/lib/apt/lists
-         
+          sudo chmod +x ./dev-vm/install-chp.sh
+          ./dev-vm/install-chp.sh
 
 
       - name: Run integration tests
-        run:  sudo kvm-ok
+        run: |
+          sudo kvm-ok
+          sudo /usr/local/cloud-hypervisor/50.0/bin/cloud-hypervisor --version
