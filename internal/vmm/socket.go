@@ -11,7 +11,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 )
 
-func newUnixSocketClient(socketPath string) (*client.ClientWithResponses, error) {
+func NewUnixSocketClient(socketPath string) (*client.ClientWithResponses, error) {
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return net.Dial("unix", socketPath)
