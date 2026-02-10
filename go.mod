@@ -12,7 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/ironcore-dev/controller-utils v0.10.0
 	github.com/ironcore-dev/ironcore v0.2.4
-	github.com/ironcore-dev/ironcore-image v0.2.6
+	github.com/ironcore-dev/ironcore-image v0.3.0
 	github.com/ironcore-dev/ironcore-net v0.2.4
 	github.com/ironcore-dev/provider-utils v0.0.0-20251013151004-d878dabff977
 	github.com/onsi/ginkgo/v2 v2.28.1
