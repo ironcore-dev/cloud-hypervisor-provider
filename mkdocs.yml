@@ -46,7 +46,8 @@ markdown_extensions:
 
 nav:
 - Home: README.md
-
+- Configuration:
+    - Ignition: config/ignition.md
 extra:
   social:
   - icon: fontawesome/brands/github

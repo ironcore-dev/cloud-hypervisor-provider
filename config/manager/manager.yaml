@@ -58,16 +58,55 @@ spec:
 #        seccompProfile:
 #          type: RuntimeDefault
       initContainers:
-        - name: prepare-host
-          image: cloud-hypervisor-prepare-host:latest
+        - name: validate-host
+          image: ubuntu
           securityContext:
-            runAsUser: 0
-            runAsGroup: 0
-          command:
-            - /prepare-host
+            privileged: true
+          command: [ '/bin/bash', '-c' ]
+          env:
+            - name: CHP_USER
+              value: "chp"
+            - name: CHP_USER_ID
+              value: "65532"
+            - name: CHP_GROUP
+              value: "chp"
+            - name: CHP_GROUP_ID
+              value: "65532"
+            - name: CHP_DIR
+              value: "/var/lib/chp"
+          args:
+            - |
+              if ! id -u $(CHP_USER); then
+                  echo "Error: $(CHP_USER) user does not exist."
+                  exit 1
+              fi
+              if ! getent group $(CHP_GROUP); then
+                  echo "Error: $(CHP_GROUP) group does not exist."
+                  exit 1
+              fi
+              if [ ! -d "$(CHP_DIR)" ]; then
+                  echo "Error: $(CHP_DIR) directory does not exist."
+                  exit 1
+              fi
+              if [ ! -e "/dev/kvm" ]; then
+                  echo "Error: /dev/kvm is not available. KVM support is required."
+                  exit 1
+              fi
+              if [ ! -x "/usr/local/bin/cloud-hypervisor" ]; then
+                  echo "Error: cloud-hypervisor binary is not installed."
+                  exit 1
+              fi
+              echo "Host validation passed."
           volumeMounts:
-            - mountPath: /var/lib/chp
-              name: cloud-hypervisor-provider
+            - name: etc
+              mountPath: /etc
+            - name: cloud-hypervisor-provider
+              mountPath: /var/lib/chp
+            - name: host-dev-kvm
+              mountPath: /dev/kvm
+            - name: host-usr-local-bin
+              mountPath: /usr/local/bin
+              readOnly: true
       containers:
         - command:
             - /machinepoollet
@@ -158,10 +197,14 @@ spec:
           hostPath:
             path: /etc
             type: Directory
-        - name: host-dpkg
+        - name: host-usr-local-bin
           hostPath:
-            path: /var/lib/dpkg
+            path: /usr/local/bin
             type: Directory
+        - name: host-dev-kvm
+          hostPath:
+            path: /dev/kvm
+            type: CharDevice
         - name: cloud-hypervisor-provider
           hostPath:
             path: /var/lib/chp
