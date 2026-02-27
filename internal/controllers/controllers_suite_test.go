@@ -14,7 +14,7 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/isolated"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/emptydisk"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/localdisk"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/strategy"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
@@ -80,7 +80,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 
 	volumePlugins := volume.NewPluginManager()
 	Expect(volumePlugins.InitPlugins(hostPaths, []volume.Plugin{
-		emptydisk.NewPlugin(rawInst),
+		localdisk.NewPlugin(rawInst, imgCache),
 	})).NotTo(HaveOccurred())
 
 	nicPlugin := isolated.NewPlugin()

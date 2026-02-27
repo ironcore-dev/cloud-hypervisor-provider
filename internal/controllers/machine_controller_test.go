@@ -4,7 +4,6 @@
 package controllers_test
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
@@ -15,7 +14,7 @@ import (
 )
 
 var _ = Describe("MachineController", func() {
-	Context("Machine Lifecycle", func(ctx context.Context) {
+	Context("Machine Lifecycle", func() {
 		var machineID string
 
 		It("should create and reconcile a machine", func(ctx SpecContext) {
@@ -25,15 +24,15 @@ var _ = Describe("MachineController", func() {
 					Power:       api.PowerStatePowerOn,
 					Cpu:         4,
 					MemoryBytes: 4294967296, // 4GB
-					Image:       ptr.To(osImage),
-					//Volumes:           []*api.VolumeSpec{
-					//	{
-					//		Name:       "root",
-					//		Device:     "oda",
-					//		EmptyDisk:  &api.EmptyDiskSpec{
-					//		},
-					//	},
-					//},
+					Volumes: []*api.VolumeSpec{
+						{
+							Name:   "root",
+							Device: "oda",
+							LocalDisk: &api.LocalDiskSpec{
+								Image: ptr.To(osImage),
+							},
+						},
+					},
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())

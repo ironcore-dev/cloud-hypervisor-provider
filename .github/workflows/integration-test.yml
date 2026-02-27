@@ -39,3 +39,4 @@ jobs:
         run: |
           sudo kvm-ok
           sudo /usr/local/cloud-hypervisor/50.0/bin/cloud-hypervisor --version
+          sudo -H -E -u $USER bash -c 'make integration-tests'
