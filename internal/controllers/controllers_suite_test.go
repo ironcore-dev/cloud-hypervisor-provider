@@ -6,6 +6,7 @@ package controllers_test
 import (
 	"context"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -39,7 +40,6 @@ const (
 )
 
 var (
-	tempDir      string
 	machineStore *hostutils.Store[*api.Machine]
 )
 
@@ -87,7 +87,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	Expect(nicPlugin.Init(hostPaths)).NotTo(HaveOccurred())
 
 	machineStore, err = hostutils.NewStore[*api.Machine](hostutils.Options[*api.Machine]{
-		Dir:            tempDir,
+		Dir:            path.Join(rootDir, "store"),
 		NewFunc:        func() *api.Machine { return &api.Machine{} },
 		CreateStrategy: strategy.MachineStrategy,
 	})
