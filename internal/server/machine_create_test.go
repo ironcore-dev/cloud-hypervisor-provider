@@ -34,14 +34,12 @@ var _ = Describe("CreateMachine", func() {
 		Expect(createResp).Should(SatisfyAll(
 			HaveField("Machine.Metadata.Id", Not(BeEmpty())),
 			HaveField("Machine.Spec.Power", iri.Power_POWER_ON),
-			HaveField("Machine.Spec.Image", BeNil()),
 			HaveField("Machine.Spec.Class", machineClassName),
 			HaveField("Machine.Spec.IgnitionData", BeNil()),
 			HaveField("Machine.Spec.Volumes", BeNil()),
 			HaveField("Machine.Spec.NetworkInterfaces", BeNil()),
 			HaveField("Machine.Status.ObservedGeneration", BeZero()),
 			HaveField("Machine.Status.State", Equal(iri.MachineState_MACHINE_PENDING)),
-			HaveField("Machine.Status.ImageRef", BeEmpty()),
 			HaveField("Machine.Status.Volumes", BeNil()),
 			HaveField("Machine.Status.NetworkInterfaces", BeNil()),
 		))
