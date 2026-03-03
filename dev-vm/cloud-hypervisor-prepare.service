@@ -1,0 +1,11 @@
+[Unit]
+Description=Installation of cloud-hypervisor-provider needed components
+# ConditionFirstBoot=yes
+After=systemd-networkd-wait-online.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/cloud-hypervisor-prepare.sh
+
+[Install]
+WantedBy=multi-user.target

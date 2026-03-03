@@ -102,7 +102,7 @@ test: generate manifests fmt vet test-only ## Run tests.
 
 .PHONY: test-only
 test-only: envtest ## Run *only* the tests - no generation, linting etc.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go run github.com/onsi/ginkgo/v2/ginkgo run -r --label-filter="!integration" -coverprofile cover.out
 
 
 ##@ Build

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+
+curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v51.1/cloud-hypervisor-static-aarch64" -o "cloud-hypervisor"
+curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v51.1/ch-remote-static-aarch64" -o "ch-remote"
+
+#curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v51.1/cloud-hypervisor-static" -o "cloud-hypervisor"
+
+sudo mv cloud-hypervisor /usr/local/bin/
+sudo mv ch-remote /usr/local/bin/
+
+chmod a+x /usr/local/bin/cloud-hypervisor
+chmod a+x /usr/local/bin/ch-remote

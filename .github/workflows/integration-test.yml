@@ -31,12 +31,45 @@ jobs:
           ca-certificates libc-bin gcc cpu-checker
           sudo update-ca-certificates
           sudo rm -rf /var/lib/apt/lists
-          sudo chmod +x ./dev-vm/install-chp.sh
-          ./dev-vm/install-chp.sh
 
+#          curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v51.1/cloud-hypervisor-static-aarch64" -o "cloud-hypervisor"
+#          curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v51.1/ch-remote-static-aarch64" -o "ch-remote"
+
+          curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v51.1/cloud-hypervisor-static" -o "cloud-hypervisor"
+          
+          sudo mv cloud-hypervisor /usr/local/bin/
+#          sudo mv ch-remote /usr/local/bin/
+          
+          chmod a+x /usr/local/bin/cloud-hypervisor
+#          chmod a+x /usr/local/bin/ch-remote
+          
+          # Create chp group and user
+          if ! getent group chp > /dev/null 2>&1; then
+            sudo groupadd -g 65532 chp
+          fi
+          if ! getent passwd chp > /dev/null 2>&1; then
+            sudo useradd -u 65532 -g chp -s /sbin/nologin -M -d /nonexistent chp
+          fi
+          
+          sudo usermod -aG kvm chp
+          
+          # Create storage directory
+          sudo mkdir -p /var/lib/chp
+          sudo mkdir -p /run/chp/ch
+          sudo chown chp:chp /var/lib/chp
+          sudo chmod 0755 /var/lib/chp
+          sudo chown chp:chp /run/chp/ch
+          sudo chmod 0755 /run/chp/ch
+          echo "CH_SOCKET_DIR=/run/chp/ch/" >> $GITHUB_ENV
+
+          sudo -u chp /usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/01.sock -v &
+          sudo -u chp /usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/02.sock -v &
+          sleep 2
+          
+          sudo ls -la /run/chp/ch
 
       - name: Run integration tests
         run: |
           sudo kvm-ok
-          sudo /usr/local/cloud-hypervisor/50.0/bin/cloud-hypervisor --version
-          sudo -H -E -u $USER bash -c 'make integration-tests'
+          sudo /usr/local/bin/cloud-hypervisor --version
+          sudo -H -E -u chp bash -c 'make integration-tests'

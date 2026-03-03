@@ -101,6 +101,10 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	Expect(err).NotTo(HaveOccurred())
 
 	chSocketDir := os.Getenv("CH_SOCKET_DIR")
+	if chSocketDir == "" {
+		log.V(1).Info("use default socket directory")
+		chSocketDir = "/run/chp/ch"
+	}
 	chFirmwarePath := os.Getenv("CH_FIRMWARE_PATH")
 
 	virtualMachineManager, err := vmm.NewManager(

@@ -6,8 +6,10 @@ package controllers_test
 import (
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
+	apiutils "github.com/ironcore-dev/provider-utils/apiutils/api"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/utils/ptr"
@@ -20,6 +22,9 @@ var _ = Describe("MachineController", func() {
 		It("should create and reconcile a machine", func(ctx SpecContext) {
 			By("creating a machine in the store")
 			machine, err := machineStore.Create(ctx, &api.Machine{
+				Metadata: apiutils.Metadata{
+					ID: uuid.NewString(),
+				},
 				Spec: api.MachineSpec{
 					Power:       api.PowerStatePowerOn,
 					Cpu:         4,

@@ -3,7 +3,7 @@ set -euo pipefail
 
 VERSION="${VERSION:-50.0}"
 ARCH="${ARCH:-x86_64}"        # x86_64 or aarch64
-BASE_DIR="/usr/local/cloud-hypervisor"
+BASE_DIR="/usr/local/bin/cloud-hypervisor"
 
 
 normalize_arch() {
@@ -43,7 +43,8 @@ case "$ARCH" in
 esac
 
 BASE_URL="https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v${VERSION}"
-DEST_DIR="${BASE_DIR}/${VERSION}/bin"
+# DEST_DIR="${BASE_DIR}/${VERSION}/bin"
+DEST_DIR="${BASE_DIR}"
 
 install_bin() {
   local name="$1"
