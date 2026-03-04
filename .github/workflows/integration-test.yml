@@ -2,15 +2,13 @@ name: Run integration tests
 
 on:
   pull_request:
-    types: [labeled, synchronize, reopened]
+    types: [ assigned, opened, synchronize, reopened ]
     paths-ignore:
       - 'docs/**'
 
 jobs:
   integration-tests:
     runs-on: ubuntu-22.04
-
-    if: contains(github.event.pull_request.labels.*.name, 'integration-tests')
 
     steps:
       - name: Checkout repository
@@ -67,6 +65,7 @@ jobs:
           sleep 2
           
           sudo ls -la /run/chp/ch
+
 
       - name: Run integration tests
         run: |
