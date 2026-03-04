@@ -17,18 +17,18 @@ import (
 
 var _ = Describe("MachineController", func() {
 	Context("Machine Lifecycle", func() {
-		var machineID string
+		machineID := uuid.NewString()
 
 		It("should create and reconcile a machine", func(ctx SpecContext) {
 			By("creating a machine in the store")
 			machine, err := machineStore.Create(ctx, &api.Machine{
 				Metadata: apiutils.Metadata{
-					ID: uuid.NewString(),
+					ID: machineID,
 				},
 				Spec: api.MachineSpec{
 					Power:       api.PowerStatePowerOn,
-					Cpu:         4,
-					MemoryBytes: 4294967296, // 4GB
+					Cpu:         2,
+					MemoryBytes: 2147483648,
 					Volumes: []*api.VolumeSpec{
 						{
 							Name:   "root",
@@ -46,7 +46,13 @@ var _ = Describe("MachineController", func() {
 
 			GinkgoWriter.Printf("Created machine: ID=%s\n", machineID)
 
-			Eventually(machine.Spec.ApiSocketPath).ShouldNot(BeEmpty())
+			Eventually(func() (*string, error) {
+				machine, err := machineStore.Get(ctx, machineID)
+				if err != nil {
+					return nil, err
+				}
+				return machine.Spec.ApiSocketPath, nil
+			}).ShouldNot(BeNil())
 
 			chClient, err := vmm.NewUnixSocketClient(ptr.Deref(machine.Spec.ApiSocketPath, ""))
 			Expect(err).NotTo(HaveOccurred())
