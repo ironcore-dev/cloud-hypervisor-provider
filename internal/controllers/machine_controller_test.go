@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
 	apiutils "github.com/ironcore-dev/provider-utils/apiutils/api"
 	. "github.com/onsi/ginkgo/v2"
@@ -46,20 +47,34 @@ var _ = Describe("MachineController", func() {
 
 			GinkgoWriter.Printf("Created machine: ID=%s\n", machineID)
 
-			Eventually(func() (*string, error) {
+			By("waiting for the api socket path to be set")
+			Eventually(func(g Gomega) *string {
 				machine, err := machineStore.Get(ctx, machineID)
-				if err != nil {
-					return nil, err
-				}
-				return machine.Spec.ApiSocketPath, nil
+				g.Expect(err).NotTo(HaveOccurred())
+
+				return machine.Spec.ApiSocketPath
 			}).ShouldNot(BeNil())
+
+			machine, err = machineStore.Get(ctx, machineID)
+			Expect(err).NotTo(HaveOccurred())
 
 			chClient, err := vmm.NewUnixSocketClient(ptr.Deref(machine.Spec.ApiSocketPath, ""))
 			Expect(err).NotTo(HaveOccurred())
 
+			By("checking that the vmm is ok")
 			resp, err := chClient.GetVmmPingWithResponse(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.StatusCode()).To(Equal(http.StatusOK))
+
+			Eventually(func(g Gomega) client.VmInfoState {
+				resp, err := chClient.GetVmInfoWithResponse(ctx)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				g.Expect(resp).NotTo(BeNil())
+				g.Expect(resp.JSON200).NotTo(BeNil())
+
+				return resp.JSON200.State
+			}).Should(Equal(client.Running))
 		})
 
 	})
