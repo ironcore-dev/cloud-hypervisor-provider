@@ -260,4 +260,4 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 
 .PHONY: integration-tests
 integration-tests: ## Run integration tests against code. For dependencies, refer to the integration-test workflow.
-	go run github.com/onsi/ginkgo/v2/ginkgo run -r --label-filter="integration" -coverprofile cover.out
+	go run github.com/onsi/ginkgo/v2/ginkgo run -r -vv --label-filter="integration" -coverprofile cover.out

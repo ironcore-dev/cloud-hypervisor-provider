@@ -563,9 +563,7 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 	if machine.Spec.ApiSocketPath == nil {
 		sock, err := r.vmm.GetFreeApiSocket()
 		if err != nil {
-			log.V(1).Info("Failed to get free api socket")
-			//TODO
-			return nil
+			return fmt.Errorf("failed to get free api socket: %w", err)
 		}
 		machine.Spec.ApiSocketPath = sock
 		machine, err = r.machines.Update(ctx, machine)
