@@ -59,7 +59,10 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	logf.SetLogger(log)
 
 	By("setting up test environment")
-	rootDir := GinkgoT().TempDir()
+	rootDir, err := os.MkdirTemp("", "chp-test-*")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(os.Chmod(rootDir, 0755)).To(Succeed())
+	DeferCleanup(func() { os.RemoveAll(rootDir) })
 
 	hostPaths, err := host.PathsAt(rootDir)
 	Expect(err).NotTo(HaveOccurred())
@@ -106,7 +109,12 @@ var _ = BeforeSuite(func(ctx context.Context) {
 		log.V(1).Info("use default socket directory")
 		chSocketDir = "/run/chp/ch"
 	}
+
 	chFirmwarePath := os.Getenv("CH_FIRMWARE_PATH")
+	if chFirmwarePath == "" {
+		log.V(1).Info("use default firmware path")
+		chFirmwarePath = "/usr/local/bin/hypervisor-fw"
+	}
 
 	virtualMachineManager, err := vmm.NewManager(
 		log.WithName("virtual-machine-manager"),

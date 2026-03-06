@@ -13,3 +13,7 @@ sudo mv ch-remote /usr/local/bin/
 
 chmod a+x /usr/local/bin/cloud-hypervisor
 chmod a+x /usr/local/bin/ch-remote
+
+
+#sudo curl -L "https://github.com/cloud-hypervisor/rust-hypervisor-firmware/releases/download/0.5.0/hypervisor-fw" -o "/usr/local/bin/hypervisor-fw"
+sudo curl -L "https://github.com/cloud-hypervisor/rust-hypervisor-firmware/releases/download/0.5.0/hypervisor-fw-aarch64" -o "/usr/local/bin/hypervisor-fw"

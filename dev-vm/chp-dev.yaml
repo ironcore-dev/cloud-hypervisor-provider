@@ -252,10 +252,9 @@ provision:
       usermod -aG kvm chp
       usermod -aG chp chp-dev
 
-      # Create storage directory
       mkdir -p /var/lib/chp
       chown chp:chp /var/lib/chp
-      chmod 0755 /var/lib/chp
+      chmod 0775 /var/lib/chp
 
       systemctl daemon-reload
       systemctl enable cloud-hypervisor-prepare.service

@@ -41,6 +41,9 @@ jobs:
 
           sudo curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v51.1/cloud-hypervisor-static" -o "/usr/local/bin/cloud-hypervisor"
 
+          # sudo curl -L "https://github.com/cloud-hypervisor/rust-hypervisor-firmware/releases/download/0.5.0/hypervisor-fw-aarch64" -o "/usr/local/bin/hypervisor-fw"
+          sudo curl -L "https://github.com/cloud-hypervisor/rust-hypervisor-firmware/releases/download/0.5.0/hypervisor-fw" -o "/usr/local/bin/hypervisor-fw"
+
           sudo chmod a+x /usr/local/bin/cloud-hypervisor
           # chmod a+x /usr/local/bin/ch-remote
           
@@ -51,9 +54,9 @@ jobs:
           if ! getent passwd chp > /dev/null 2>&1; then
             sudo useradd -u 65532 -g chp -s /sbin/nologin -M -d /nonexistent chp
           fi
-          
+
           sudo usermod -aG kvm chp
-          
+
           # Create storage directory
           sudo mkdir -p /var/lib/chp
           sudo mkdir -p /run/chp/ch
@@ -65,8 +68,12 @@ jobs:
 
           sudo -u chp /usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/01.sock -v &
           sudo -u chp /usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/02.sock -v &
-          sleep 2
           
+          sleep 2
+
+          # Make sockets accessible to runner
+          sudo chmod o+rw /run/chp/ch/*.sock
+
           sudo ls -la /run/chp/ch
 
 
