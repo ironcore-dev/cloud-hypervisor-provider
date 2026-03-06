@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 User=chp
 Group=chp
+UMask=0007
 
 RuntimeDirectory=chp/ch
 RuntimeDirectoryMode=0755

@@ -47,6 +47,22 @@ var _ = Describe("MachineController", func() {
 
 			GinkgoWriter.Printf("Created machine: ID=%s\n", machineID)
 
+			By("verifying image pulling event was recorded")
+			Eventually(func(g Gomega) bool {
+				events := eventRecorder.ListEvents()
+				GinkgoWriter.Printf("Total events recorded: %d\n", len(events))
+
+				// Look for the PullingImage event for this machine
+				for _, evt := range events {
+					if evt.InvolvedObjectMeta.ID == machineID && evt.Reason == "PullingImage" {
+						GinkgoWriter.Printf("Found PullingImage event for machine %s: %s\n", machineID, evt.Message)
+						return true
+					}
+				}
+
+				return false
+			}).Should(BeTrue())
+
 			By("waiting for the api socket path to be set")
 			Eventually(func(g Gomega) *string {
 				machine, err := machineStore.Get(ctx, machineID)

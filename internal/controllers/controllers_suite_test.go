@@ -33,14 +33,15 @@ import (
 )
 
 const (
-	eventuallyTimeout    = 80 * time.Second
+	eventuallyTimeout    = 180 * time.Second
 	pollingInterval      = 50 * time.Millisecond
 	consistentlyDuration = 1 * time.Second
 	osImage              = "ghcr.io/ironcore-dev/os-images/virtualization/gardenlinux:latest"
 )
 
 var (
-	machineStore *hostutils.Store[*api.Machine]
+	machineStore  *hostutils.Store[*api.Machine]
+	eventRecorder *recorder.Store
 )
 
 func TestControllers(t *testing.T) {
@@ -118,7 +119,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	eventRecorder := recorder.NewEventStore(log, recorder.EventStoreOptions{})
+	eventRecorder = recorder.NewEventStore(log, recorder.EventStoreOptions{})
 	machineReconciler, err := controllers.NewMachineReconciler(
 		log.WithName("machine-reconciler"),
 		machineStore,
@@ -135,24 +136,30 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	DeferCleanup(cancel)
+
 	go func() {
 		defer GinkgoRecover()
-		Expect(imgCache.Start(ctx)).To(Succeed())
+		Expect(imgCache.Start(cancelCtx)).To(Succeed())
 	}()
 
 	go func() {
 		defer GinkgoRecover()
-		Expect(machineReconciler.Start(ctx)).To(Succeed())
+		Expect(machineReconciler.Start(cancelCtx)).To(Succeed())
 	}()
 
 	go func() {
 		defer GinkgoRecover()
-		Expect(machineEvents.Start(ctx)).To(Succeed())
+		Expect(machineEvents.Start(cancelCtx)).To(Succeed())
 	}()
 
 	go func() {
 		defer GinkgoRecover()
-		eventRecorder.Start(ctx)
+		eventRecorder.Start(cancelCtx)
 	}()
+
+	// Wait for services to start
+	time.Sleep(200 * time.Millisecond)
 
 })

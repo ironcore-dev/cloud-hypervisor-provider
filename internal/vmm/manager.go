@@ -62,6 +62,11 @@ func NewManager(log logr.Logger, paths host.Paths, opts ManagerOptions) (*Manage
 			continue
 		}
 
+		if _, err := apiClient.GetVmmPing(context.TODO()); err != nil {
+			initLog.V(1).Info("Failed to ping cloud-hypervisor socket", "path", socketPath)
+			continue
+		}
+
 		initLog.V(2).Info("Created cloud-hypervisor client", "socketPath", socketPath)
 		m.instances[socketPath] = apiClient
 
@@ -75,6 +80,9 @@ func NewManager(log logr.Logger, paths host.Paths, opts ManagerOptions) (*Manage
 	}
 
 	initLog.V(1).Info("Successfully initialized clients", "num", len(m.instances))
+	if len(m.instances) == 0 {
+		return nil, errors.New("no instances found")
+	}
 
 	return m, nil
 }
