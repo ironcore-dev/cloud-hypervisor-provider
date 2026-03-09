@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=chp
 Group=chp
-UMask=0007
+SupplementaryGroups=kvm
 
 RuntimeDirectory=chp/ch
 RuntimeDirectoryMode=0755

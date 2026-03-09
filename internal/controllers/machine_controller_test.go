@@ -5,6 +5,7 @@ package controllers_test
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
@@ -52,7 +53,6 @@ var _ = Describe("MachineController", func() {
 				events := eventRecorder.ListEvents()
 				GinkgoWriter.Printf("Total events recorded: %d\n", len(events))
 
-				// Look for the PullingImage event for this machine
 				for _, evt := range events {
 					if evt.InvolvedObjectMeta.ID == machineID && evt.Reason == "PullingImage" {
 						GinkgoWriter.Printf("Found PullingImage event for machine %s: %s\n", machineID, evt.Message)
@@ -91,7 +91,23 @@ var _ = Describe("MachineController", func() {
 
 				return resp.JSON200.State
 			}).Should(Equal(client.Running))
-		})
 
+			Expect(machineStore.Delete(ctx, machineID)).Should(Succeed())
+
+			By("waiting for the api socket path to be set")
+			Eventually(func(g Gomega) *time.Time {
+				machine, err := machineStore.Get(ctx, machineID)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				return machine.DeletedAt
+			}).ShouldNot(BeNil())
+
+			Eventually(func(g Gomega) string {
+				resp, err := chClient.GetVmInfoWithResponse(ctx)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				return string(resp.Body)
+			}).Should(ContainSubstring("VM is not created"))
+		})
 	})
 })
