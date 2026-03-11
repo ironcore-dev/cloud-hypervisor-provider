@@ -13,6 +13,7 @@ RuntimeDirectory=chp/ch
 RuntimeDirectoryMode=0755
 
 ExecStart=/usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/%i.sock -v
+ExecStartPost=/usr/bin/bash -c 'while [ ! -S /run/chp/ch/%i.sock ]; do sleep 0.1; done && chmod g+rw /run/chp/ch/%i.sock'
 
 Restart=on-failure
 RestartSec=1

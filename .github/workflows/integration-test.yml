@@ -8,7 +8,7 @@ on:
 
 jobs:
   integration-tests:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     if: contains(github.event.pull_request.labels.*.name, 'integration-tests')
 
@@ -36,16 +36,10 @@ jobs:
           sudo update-ca-certificates
           sudo rm -rf /var/lib/apt/lists
 
-          # curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v51.1/cloud-hypervisor-static-aarch64" -o "cloud-hypervisor"
-          # curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v51.1/ch-remote-static-aarch64" -o "ch-remote"
-
           sudo curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v51.1/cloud-hypervisor-static" -o "/usr/local/bin/cloud-hypervisor"
-
-          # sudo curl -L "https://github.com/cloud-hypervisor/rust-hypervisor-firmware/releases/download/0.5.0/hypervisor-fw-aarch64" -o "/usr/local/bin/hypervisor-fw"
           sudo curl -L "https://github.com/cloud-hypervisor/rust-hypervisor-firmware/releases/download/0.5.0/hypervisor-fw" -o "/usr/local/bin/hypervisor-fw"
 
           sudo chmod a+x /usr/local/bin/cloud-hypervisor
-          # chmod a+x /usr/local/bin/ch-remote
 
           # Create chp group and user
           if ! getent group chp > /dev/null 2>&1; then
