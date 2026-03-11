@@ -1,6 +1,6 @@
 module github.com/ironcore-dev/cloud-hypervisor-provider
 
-go 1.24.1
+go 1.25.0
 
 require (
 	github.com/blang/semver/v4 v4.0.0
@@ -17,8 +17,8 @@ require (
 	github.com/onsi/gomega v1.39.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
-	golang.org/x/sync v0.19.0
-	google.golang.org/grpc v1.79.1
+	golang.org/x/sync v0.20.0
+	google.golang.org/grpc v1.79.2
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
 	k8s.io/client-go v0.34.1
