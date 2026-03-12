@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
@@ -43,14 +42,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-var (
-	homeDir string
-)
-
-func init() {
-	homeDir, _ = os.UserHomeDir()
-}
-
 type Options struct {
 	Address string
 
@@ -68,40 +59,40 @@ type Options struct {
 }
 
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&o.Address, "address", "/var/run/iri-machinebroker.sock", "Address to listen on.")
+	fs.StringVar(&o.Address, "address", "/run/chp/iri-machinebroker.sock", "Address to listen on.")
 
 	fs.StringVar(
 		&o.RootDir,
 		"provider-root-dir",
-		filepath.Join(homeDir, ".cloud-hypervisor-provider"),
+		"/var/lib/chp",
 		"Path to the directory where the provider manages its content at.",
 	)
 
 	fs.StringVar(
 		&o.MachineStoreDir,
 		"provider-machine-store-dir",
-		filepath.Join(homeDir, ".cloud-hypervisor-provider/store/machine"),
+		"/var/lib/chp/store",
 		"Path to the directory of the machine store.",
 	)
 
 	fs.StringVar(
 		&o.QMPSocketPath,
 		"qmp-socket-path",
-		filepath.Join(homeDir, ".cloud-hypervisor-provider/qmp.sock"),
+		"/run/chp/qmp/sock",
 		"Path to the qmp socket.",
 	)
 
 	fs.StringVar(
 		&o.CloudHypervisorSocketsPath,
 		"cloud-hypervisor-sockets-path",
-		"",
+		"/run/chp/ch/",
 		"Path to the cloud-hypervisor management sockets.",
 	)
 
 	fs.StringVar(
 		&o.CloudHypervisorFirmwarePath,
 		"cloud-hypervisor-firmware-path",
-		"",
+		"/usr/local/bin/hypervisor-fw",
 		"Path to the cloud-hypervisor firmware.",
 	)
 
