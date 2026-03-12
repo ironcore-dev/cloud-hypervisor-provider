@@ -8,7 +8,6 @@ import (
 	b64 "encoding/base64"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -29,13 +28,8 @@ type ManagerOptions struct {
 	ReservedInstances []string
 }
 
-func NewManager(log logr.Logger, paths host.Paths, opts ManagerOptions) (*Manager, error) {
+func NewManager(ctx context.Context, log logr.Logger, paths host.Paths, opts ManagerOptions) (*Manager, error) {
 	initLog := log.WithName("init")
-
-	entries, err := os.ReadDir(opts.CHSocketsPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read cloud-hypervisor sockets dir: %w", err)
-	}
 
 	m := &Manager{
 		idMu:         utilssync.NewMutexMap[string](),
@@ -45,24 +39,18 @@ func NewManager(log logr.Logger, paths host.Paths, opts ManagerOptions) (*Manage
 		log:          log,
 		free:         sets.New[string](),
 	}
-	reserved := sets.NewString(opts.ReservedInstances...)
-	for _, v := range entries {
-		if v.IsDir() {
-			continue
-		}
-		if filepath.Ext(v.Name()) != ".sock" {
-			continue
-		}
+	reserved := sets.New[string](opts.ReservedInstances...)
 
-		socketPath := filepath.Join(opts.CHSocketsPath, v.Name())
+	socketPaths, _ := filepath.Glob(filepath.Join(opts.CHSocketsPath, "*", "api.sock"))
 
+	for _, socketPath := range socketPaths {
 		apiClient, err := NewUnixSocketClient(socketPath)
 		if err != nil {
 			initLog.V(1).Info("Failed to init cloud-hypervisor client", "path", socketPath)
 			continue
 		}
 
-		if _, err := apiClient.GetVmmPing(context.TODO()); err != nil {
+		if _, err := apiClient.GetVmmPing(ctx); err != nil {
 			initLog.V(1).Info("Failed to ping cloud-hypervisor socket", "path", socketPath)
 			continue
 		}
@@ -70,7 +58,7 @@ func NewManager(log logr.Logger, paths host.Paths, opts ManagerOptions) (*Manage
 		initLog.V(2).Info("Created cloud-hypervisor client", "socketPath", socketPath)
 		m.instances[socketPath] = apiClient
 
-		if _, err := m.GetVM(context.TODO(), socketPath); errors.Is(err, ErrVmNotCreated) {
+		if _, err := m.GetVM(ctx, socketPath); errors.Is(err, ErrVmNotCreated) {
 			if !reserved.Has(socketPath) {
 				m.free.Insert(socketPath)
 			} else {
@@ -283,7 +271,7 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 		Platform: platform,
 	})
 	if err != nil {
-		return wrapIfSocketClosed(fmt.Errorf("failed to get vm: %w", err))
+		return wrapIfSocketClosed(fmt.Errorf("failed to create vm: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
@@ -341,7 +329,7 @@ func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.Networ
 		Path: nic.Path,
 	})
 	if err != nil {
-		return wrapIfSocketClosed(fmt.Errorf("failed to remove device: %w", err))
+		return wrapIfSocketClosed(fmt.Errorf("failed to add nic: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
