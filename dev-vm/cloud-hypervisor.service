@@ -1,6 +1,7 @@
 [Unit]
 Description=Cloud Hypervisor Instance %i
-After=network-online.target
+After=network-online.target cloud-hypervisor-prepare.service
+Requires=cloud-hypervisor-prepare.service
 Wants=network-online.target
 
 [Service]
@@ -9,11 +10,11 @@ User=chp
 Group=chp
 SupplementaryGroups=kvm
 
-RuntimeDirectory=chp/ch
+RuntimeDirectory=chp/ch/%i
 RuntimeDirectoryMode=0755
 
-ExecStart=/usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/%i.sock -v
-ExecStartPost=/usr/bin/bash -c 'while [ ! -S /run/chp/ch/%i.sock ]; do sleep 0.1; done && chmod g+rw /run/chp/ch/%i.sock'
+ExecStart=/usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/%i/api.sock -v
+ExecStartPost=/usr/bin/bash -c 'while [ ! -S /run/chp/ch/%i/api.sock ]; do sleep 0.1; done && chmod g+rw /run/chp/ch/%i/api.sock'
 
 Restart=on-failure
 RestartSec=1

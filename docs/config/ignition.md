@@ -33,10 +33,10 @@ systemd:
         User=chp
         Group=chp
 
-        RuntimeDirectory=chp/ch
+        RuntimeDirectory=chp/ch/%i
         RuntimeDirectoryMode=0755
 
-        ExecStart=/usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/%i.sock -v
+        ExecStart=/usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/%i/api.sock -v
 
         Restart=on-failure
         RestartSec=1

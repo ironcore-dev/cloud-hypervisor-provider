@@ -252,6 +252,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	virtualMachineManager, err := vmm.NewManager(
+		ctx,
 		log.WithName("virtual-machine-manager"),
 		hostPaths,
 		vmm.ManagerOptions{
