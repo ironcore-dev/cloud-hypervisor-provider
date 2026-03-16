@@ -53,20 +53,20 @@ jobs:
 
           # Create storage directory
           sudo mkdir -p /var/lib/chp
-          sudo mkdir -p /run/chp/ch
+          sudo mkdir -p /run/chp/ch/01 /run/chp/ch/02
           sudo chown chp:chp /var/lib/chp
           sudo chmod 0755 /var/lib/chp
-          sudo chown chp:chp /run/chp/ch
-          sudo chmod 0755 /run/chp/ch
+          sudo chown -R chp:chp /run/chp/ch
+          sudo chmod -R 0755 /run/chp/ch
           echo "CH_SOCKET_DIR=/run/chp/ch/" >> $GITHUB_ENV
 
-          sudo -u chp /usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/01.sock -v &
-          sudo -u chp /usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/02.sock -v &
+          sudo -u chp /usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/01/api.sock -v &
+          sudo -u chp /usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/02/api.sock -v &
 
           sleep 2
 
           # Make sockets accessible to runner
-          sudo chmod o+rw /run/chp/ch/*.sock
+          sudo chmod o+rw /run/chp/ch/01/api.sock /run/chp/ch/02/api.sock
 
           sudo ls -la /run/chp/ch
 

@@ -259,8 +259,8 @@ provision:
       systemctl daemon-reload
       systemctl enable cloud-hypervisor-prepare.service
       systemctl start cloud-hypervisor-prepare.service
-      systemctl start cloud-hypervisor@vm1
-      systemctl start cloud-hypervisor@vm2
+      systemctl start cloud-hypervisor@1
+      systemctl start cloud-hypervisor@2
   - mode: data
     path: /opt/cloud-hypervisor-prepare.sh
     owner: "root:root"
