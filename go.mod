@@ -2,6 +2,8 @@ module github.com/ironcore-dev/cloud-hypervisor-provider
 
 go 1.25.0
 
+toolchain go1.26.2
+
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/digitalocean/go-qemu v0.0.0-20250212194115-ee9b0668d242

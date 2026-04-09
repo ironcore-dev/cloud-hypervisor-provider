@@ -1,5 +1,11 @@
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.24.1 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.2-bookworm AS builder
+
+# Prevent Go from downloading a different toolchain at build time.
+# The Docker image IS the toolchain — if go.mod requires something newer,
+# we want a loud failure, not a silent download.
+ENV GOTOOLCHAIN=local
+
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILDPLATFORM
