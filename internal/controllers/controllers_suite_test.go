@@ -70,7 +70,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	platform, err := ocihostutils.Platform()
 	Expect(err).NotTo(HaveOccurred())
 
-	reg, err := remote.DockerRegistryWithPlatform(nil, platform)
+	reg, err := remote.DockerRegistryWithPlatform(platform)
 	Expect(err).NotTo(HaveOccurred())
 
 	ociStore, err := ocistore.New(hostPaths.ImagesDir())
