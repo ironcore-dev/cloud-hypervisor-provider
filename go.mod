@@ -7,7 +7,7 @@ toolchain go1.26.2
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/digitalocean/go-qemu v0.0.0-20250212194115-ee9b0668d242
-	github.com/getkin/kin-openapi v0.137.0
+	github.com/getkin/kin-openapi v0.138.0
 	github.com/go-logr/logr v1.4.3
 	github.com/google/uuid v1.6.0
 	github.com/ironcore-dev/controller-utils v0.11.0
