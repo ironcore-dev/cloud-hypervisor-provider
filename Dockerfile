@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.26.3-bookworm AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.4-bookworm AS builder
 
 # Set explicitly — the golang image defaults to this today, but we pin it
 # so the policy is visible and survives upstream default changes.
@@ -69,7 +69,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     ./cmd/prepare-host
 
 
-FROM alpine:3.23 AS prepare-host
+FROM alpine:3.24 AS prepare-host
 RUN apk add --no-cache ca-certificates
 
 WORKDIR /
