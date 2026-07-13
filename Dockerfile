@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.26.4-bookworm AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.5-bookworm AS builder
 
 # Set explicitly — the golang image defaults to this today, but we pin it
 # so the policy is visible and survives upstream default changes.
