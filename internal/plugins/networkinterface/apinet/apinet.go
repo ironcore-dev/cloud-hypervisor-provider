@@ -20,6 +20,7 @@ import (
 	apinetv1alpha1 "github.com/ironcore-dev/ironcore-net/api/core/v1alpha1"
 	apinet "github.com/ironcore-dev/ironcore-net/apimachinery/api/net"
 	"github.com/ironcore-dev/ironcore-net/apinetlet/provider"
+	apinetv1alpha1apply "github.com/ironcore-dev/ironcore-net/client-go/applyconfigurations/core/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -129,29 +130,30 @@ func (p *Plugin) Apply(
 		return nil, err
 	}
 
-	apinetNic := &apinetv1alpha1.NetworkInterface{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: apinetv1alpha1.SchemeGroupVersion.String(),
-			Kind:       "NetworkInterface",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: apinetNamespace,
-			Name:      p.APInetNicName(machineID, spec.Name),
-		},
-		Spec: apinetv1alpha1.NetworkInterfaceSpec{
-			NetworkRef: corev1.LocalObjectReference{
-				Name: apinetNetworkName,
-			},
-			NodeRef: corev1.LocalObjectReference{
-				Name: p.nodeName,
-			},
-			IPs: ironcoreIPsToAPInetIPs(spec.Ips),
-		},
+	apinetNicKey := client.ObjectKey{
+		Namespace: apinetNamespace,
+		Name:      p.APInetNicName(machineID, spec.Name),
 	}
 
+	apinetNicCfg := apinetv1alpha1apply.NetworkInterface(apinetNicKey.Name, apinetNicKey.Namespace).
+		WithSpec(apinetv1alpha1apply.NetworkInterfaceSpec().
+			WithNetworkRef(corev1.LocalObjectReference{
+				Name: apinetNetworkName,
+			}).
+			WithNodeRef(corev1.LocalObjectReference{
+				Name: p.nodeName,
+			}).
+			WithIPs(ironcoreIPsToAPInetIPs(spec.Ips)...),
+		)
+
 	log.V(2).Info("Applying apinet nic")
-	if err := p.apinetClient.Patch(ctx, apinetNic, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
+	if err := p.apinetClient.Apply(ctx, apinetNicCfg, fieldOwner, client.ForceOwnership); err != nil {
 		return nil, fmt.Errorf("error applying apinet network interface: %w", err)
+	}
+
+	apinetNic := &apinetv1alpha1.NetworkInterface{}
+	if err := p.apinetClient.Get(ctx, apinetNicKey, apinetNic); err != nil {
+		return nil, fmt.Errorf("error fetching apinet network interface %s: %w", apinetNicKey, err)
 	}
 
 	if apinetNic.Status.State == apinetv1alpha1.NetworkInterfaceStateReady {
@@ -175,7 +177,6 @@ func (p *Plugin) Apply(
 	}
 
 	log.V(2).Info("Waiting for apinet network interface to become ready")
-	apinetNicKey := client.ObjectKeyFromObject(apinetNic)
 	if err := wait.PollUntilContextTimeout(
 		ctx,
 		500*time.Millisecond,
