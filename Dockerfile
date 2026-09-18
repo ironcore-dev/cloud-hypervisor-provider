@@ -47,11 +47,10 @@ RUN if [ "$TARGETARCH" = "$BUILDARCH" ]; then \
     fi
 
 
-# Use distroless as minimal base image to package the manager binary
-FROM debian:bullseye-slim AS cloud-hypervisor-provider
+# distroless static: no glibc/shell needed (binaries are CGO_ENABLED=0) and no apt
+# step, so the image doesn't break when a Debian release goes EOL (bullseye did).
+FROM gcr.io/distroless/static-debian13 AS cloud-hypervisor-provider
 WORKDIR /
-
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Copy the binaries from the builder
 COPY --from=builder /workspace/bin/cloud-hypervisor-provider .
