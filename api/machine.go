@@ -18,8 +18,6 @@ type Machine struct {
 }
 
 type MachineSpec struct {
-	ApiSocketPath *string `json:"api"`
-
 	Power PowerState `json:"power"`
 
 	Cpu         int64 `json:"cpuMillis"`

@@ -21,6 +21,11 @@ const (
 	DefaultMachineRootFSFile           = "rootfs"
 	DefaultMachinePluginsDir           = "plugins"
 	DefaultMachineNetworkInterfacesDir = "networkinterfaces"
+
+	DefaultMachineChSocketFile = "api.sock"
+	DefaultMachineChPidFile    = "ch.pid"
+	DefaultMachineChLogFile    = "ch.log"
+	DefaultMachineChSerialFile = "serial.sock"
 )
 
 type Paths interface {
@@ -38,6 +43,11 @@ type Paths interface {
 	MachineRootFSDir(machineUID string) string
 	MachineRootFSFile(machineUID string) string
 	MachineVolumesDir(machineUID string) string
+
+	MachineChSocket(machineUID string) string
+	MachineChPidFile(machineUID string) string
+	MachineChLog(machineUID string) string
+	MachineChSerialSocket(machineUID string) string
 
 	MachineVolumesPluginDir(machineUID string, pluginName string) string
 	MachineVolumeDir(machineUID string, pluginName, volumeName string) string
@@ -75,6 +85,22 @@ func (p *paths) PluginDir(pluginName string) string {
 
 func (p *paths) MachineDir(machineUID string) string {
 	return filepath.Join(p.MachinesDir(), machineUID)
+}
+
+func (p *paths) MachineChSocket(machineUID string) string {
+	return filepath.Join(p.MachineDir(machineUID), DefaultMachineChSocketFile)
+}
+
+func (p *paths) MachineChPidFile(machineUID string) string {
+	return filepath.Join(p.MachineDir(machineUID), DefaultMachineChPidFile)
+}
+
+func (p *paths) MachineChLog(machineUID string) string {
+	return filepath.Join(p.MachineDir(machineUID), DefaultMachineChLogFile)
+}
+
+func (p *paths) MachineChSerialSocket(machineUID string) string {
+	return filepath.Join(p.MachineDir(machineUID), DefaultMachineChSerialFile)
 }
 
 func (p *paths) MachineRootFSDir(machineUID string) string {

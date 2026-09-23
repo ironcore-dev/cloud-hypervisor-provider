@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="${VERSION:-50.0}"
+VERSION="${VERSION:-51.1}"
 ARCH="${ARCH:-x86_64}"        # x86_64 or aarch64
 BASE_DIR="/usr/local/bin/cloud-hypervisor"
 

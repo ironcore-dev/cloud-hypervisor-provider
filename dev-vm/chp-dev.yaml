@@ -250,17 +250,61 @@ provision:
       fi
       
       usermod -aG kvm chp
-      usermod -aG chp chp-dev
+      usermod -aG chp,kvm chp-dev
 
       mkdir -p /var/lib/chp
       chown chp:chp /var/lib/chp
       chmod 0775 /var/lib/chp
 
+      cat > /etc/tmpfiles.d/chp.conf <<'EOF'
+      d /run/chp     0775 chp chp -
+      d /run/chp/qmp 0775 chp chp -
+      EOF
+      systemd-tmpfiles --create /etc/tmpfiles.d/chp.conf
+
       systemctl daemon-reload
       systemctl enable cloud-hypervisor-prepare.service
       systemctl start cloud-hypervisor-prepare.service
-      systemctl start cloud-hypervisor@vm1
-      systemctl start cloud-hypervisor@vm2
+
+      apt-get install -y qemu-utils
+      systemctl enable chp-qmp.service
+      systemctl start chp-qmp.service
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -Eeuo pipefail
+
+      GO_VERSION="1.26.2"
+
+      case "$(uname -m)" in
+        x86_64)  GO_ARCH="amd64" ;;
+        aarch64) GO_ARCH="arm64" ;;
+        *) echo "unsupported arch $(uname -m)" >&2; exit 1 ;;
+      esac
+
+      # Skip if the desired version is already installed.
+      if [ "$(/usr/local/go/bin/go version 2>/dev/null | awk '{print $3}')" = "go${GO_VERSION}" ]; then
+        echo "go${GO_VERSION} already installed"
+      else
+        tarball="go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
+        curl -fsSL "https://go.dev/dl/${tarball}" -o "/tmp/${tarball}"
+        rm -rf /usr/local/go
+        tar -C /usr/local -xzf "/tmp/${tarball}"
+        rm -f "/tmp/${tarball}"
+      fi
+
+      # Put go on PATH for every login shell.
+      cat > /etc/profile.d/go.sh <<'EOF'
+      export PATH="$PATH:/usr/local/go/bin"
+      EOF
+      chmod 0644 /etc/profile.d/go.sh
+
+      # Install irictl-machine (the IRI CLI used to create/manage machines) so
+      # it is available on PATH for local testing.
+      GOBIN=/usr/local/bin GOCACHE=/tmp/gocache GOPATH=/tmp/gopath \
+        /usr/local/go/bin/go install \
+        github.com/ironcore-dev/ironcore/irictl-machine/cmd/irictl-machine@main
+      rm -rf /tmp/gocache /tmp/gopath
   - mode: data
     path: /opt/cloud-hypervisor-prepare.sh
     owner: "root:root"
@@ -274,11 +318,11 @@ provision:
     file:
       url: cloud-hypervisor-prepare.service
   - mode: data
-    path: /etc/systemd/system/cloud-hypervisor@.service
+    path: /etc/systemd/system/chp-qmp.service
     owner: "root:root"
     permissions: 644
     file:
-      url: cloud-hypervisor.service
+      url: chp-qmp.service
 # provision:
 # # `system` is executed with root privileges
 # - mode: system

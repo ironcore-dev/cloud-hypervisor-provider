@@ -9,82 +9,36 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
+	"os/exec"
 	"strings"
-	"sync"
 	"syscall"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	utilssync "github.com/ironcore-dev/provider-utils/storeutils/sync"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 )
 
+const socketReadyTimeout = 10 * time.Second
+const terminateGracePeriod = 5 * time.Second
+
 type ManagerOptions struct {
-	CHSocketsPath     string
-	FirmwarePath      string
-	ReservedInstances []string
+	ChBinaryPath string
+	FirmwarePath string
 }
 
 func NewManager(log logr.Logger, paths host.Paths, opts ManagerOptions) (*Manager, error) {
-	initLog := log.WithName("init")
-
-	entries, err := os.ReadDir(opts.CHSocketsPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read cloud-hypervisor sockets dir: %w", err)
-	}
-
-	m := &Manager{
+	return &Manager{
 		idMu:         utilssync.NewMutexMap[string](),
 		instances:    make(map[string]*client.ClientWithResponses),
 		paths:        paths,
+		chBinaryPath: opts.ChBinaryPath,
 		firmwarePath: opts.FirmwarePath,
 		log:          log,
-		free:         sets.New[string](),
-	}
-	reserved := sets.NewString(opts.ReservedInstances...)
-	for _, v := range entries {
-		if v.IsDir() {
-			continue
-		}
-		if filepath.Ext(v.Name()) != ".sock" {
-			continue
-		}
-
-		socketPath := filepath.Join(opts.CHSocketsPath, v.Name())
-
-		apiClient, err := NewUnixSocketClient(socketPath)
-		if err != nil {
-			initLog.V(1).Info("Failed to init cloud-hypervisor client", "path", socketPath)
-			continue
-		}
-
-		if _, err := apiClient.GetVmmPing(context.TODO()); err != nil {
-			initLog.V(1).Info("Failed to ping cloud-hypervisor socket", "path", socketPath)
-			continue
-		}
-
-		initLog.V(2).Info("Created cloud-hypervisor client", "socketPath", socketPath)
-		m.instances[socketPath] = apiClient
-
-		if _, err := m.GetVM(context.TODO(), socketPath); errors.Is(err, ErrVmNotCreated) {
-			if !reserved.Has(socketPath) {
-				m.free.Insert(socketPath)
-			} else {
-				initLog.V(2).Info("Socket blocked and skipped", "socketPath", socketPath)
-			}
-		}
-	}
-
-	initLog.V(1).Info("Successfully initialized clients", "num", len(m.instances))
-	if len(m.instances) == 0 {
-		return nil, errors.New("no instances found")
-	}
-
-	return m, nil
+	}, nil
 }
 
 type Manager struct {
@@ -93,10 +47,8 @@ type Manager struct {
 	idMu      *utilssync.MutexMap[string]
 	instances map[string]*client.ClientWithResponses
 
-	free   sets.Set[string]
-	freeMu sync.Mutex
-
 	paths        host.Paths
+	chBinaryPath string
 	firmwarePath string
 }
 
@@ -106,59 +58,169 @@ var (
 	ErrVmNotCreated = errors.New("vm is not created")
 )
 
-func (m *Manager) Ping(ctx context.Context, instanceID string) error {
-	m.idMu.Lock(instanceID)
-	defer m.idMu.Unlock(instanceID)
-	return m.ping(ctx, instanceID)
+type VMState string
+
+const (
+	VMStateCreated VMState = "Created"
+	VMStateRunning VMState = "Running"
+	VMStateShutoff VMState = "Shutoff"
+	VMStatePaused  VMState = "Paused"
+)
+
+type VMStatus struct {
+	State             VMState
+	Disks             []string
+	NetworkInterfaces []string
 }
 
-func (m *Manager) ping(ctx context.Context, instanceID string) error {
-	log := m.log.WithValues("instanceID", instanceID)
+func (m *Manager) ensureVMM(ctx context.Context, machineID string) error {
+	log := m.log.WithValues("machineID", machineID)
 
-	apiClient, found := m.instances[instanceID]
-	if !found {
-		return ErrNotFound
+	if apiClient, ok := m.instances[machineID]; ok {
+		if _, err := apiClient.GetVmmPing(ctx); err == nil {
+			return nil
+		}
+		log.V(1).Info("Tracked client is stale, dropping")
+		delete(m.instances, machineID)
 	}
 
-	ping, err := apiClient.GetVmmPingWithResponse(ctx)
+	sockPath := m.paths.MachineChSocket(machineID)
+	if apiClient, err := NewUnixSocketClient(sockPath); err == nil {
+		if _, err := apiClient.GetVmmPing(ctx); err == nil {
+			log.V(1).Info("Adopted running cloud-hypervisor", "socketPath", sockPath)
+			m.instances[machineID] = apiClient
+			return nil
+		}
+	}
+
+	if pid, ok := m.readPid(machineID); ok && processAlive(pid) {
+		return fmt.Errorf("cloud-hypervisor pid %d alive but socket %s not responding", pid, sockPath)
+	}
+
+	apiClient, err := m.launch(ctx, machineID)
 	if err != nil {
-		return wrapIfSocketClosed(fmt.Errorf("failed to ping vmm: %w", err))
+		return err
 	}
-
-	if ping.JSON200 != nil {
-		log.V(2).Info(
-			"ping vmm",
-			"version", ping.JSON200.Version,
-			"pid", ptr.Deref(ping.JSON200.Pid, -1),
-			"features", ptr.Deref(ping.JSON200.Features, nil),
-			"build-version", ptr.Deref(ping.JSON200.BuildVersion, ""),
-		)
-	}
-
+	m.instances[machineID] = apiClient
 	return nil
 }
 
-func (m *Manager) GetFreeApiSocket() (*string, error) {
-	m.freeMu.Lock()
-	defer m.freeMu.Unlock()
-
-	socket, found := m.free.PopAny()
-	if !found {
-		return nil, fmt.Errorf("no free socket available")
+func (m *Manager) adopt(ctx context.Context, machineID string) bool {
+	if _, ok := m.instances[machineID]; ok {
+		return true
 	}
-
-	return ptr.To(socket), nil
+	sockPath := m.paths.MachineChSocket(machineID)
+	apiClient, err := NewUnixSocketClient(sockPath)
+	if err != nil {
+		return false
+	}
+	if _, err := apiClient.GetVmmPing(ctx); err != nil {
+		return false
+	}
+	m.log.V(1).Info("Adopted running cloud-hypervisor", "machineID", machineID, "socketPath", sockPath)
+	m.instances[machineID] = apiClient
+	return true
 }
 
-func (m *Manager) FreeApiSocket(ctx context.Context, socket string) {
-	m.freeMu.Lock()
-	defer m.freeMu.Unlock()
+func (m *Manager) launch(ctx context.Context, machineID string) (*client.ClientWithResponses, error) {
+	log := m.log.WithValues("machineID", machineID)
 
-	if err := m.ping(ctx, socket); err != nil {
-		m.log.Info("Failed to ping socket: discard socket", "socket", socket)
-		return
+	sockPath := m.paths.MachineChSocket(machineID)
+	logPath := m.paths.MachineChLog(machineID)
+
+	if err := os.Remove(sockPath); err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to remove stale socket: %w", err)
 	}
-	m.free.Insert(socket)
+	if err := os.Remove(m.paths.MachineChSerialSocket(machineID)); err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to remove stale serial socket: %w", err)
+	}
+
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open cloud-hypervisor log: %w", err)
+	}
+	defer func() {
+		_ = logFile.Close() // the child keeps its own inherited fd
+	}()
+
+	cmd := exec.Command(m.chBinaryPath, "--api-socket", sockPath, "-v")
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	// Own process group, no Pdeathsig: the process must outlive the provider.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start cloud-hypervisor: %w", err)
+	}
+	pid := cmd.Process.Pid
+	log.V(1).Info("Started cloud-hypervisor", "pid", pid, "socketPath", sockPath)
+
+	if err := m.writePid(machineID, pid); err != nil {
+		_ = syscall.Kill(-pid, syscall.SIGKILL)
+		return nil, fmt.Errorf("failed to write pidfile: %w", err)
+	}
+
+	go func() {
+		werr := cmd.Wait()
+		log.Info("cloud-hypervisor exited", "pid", pid, "err", werr)
+	}()
+
+	apiClient, err := NewUnixSocketClient(sockPath)
+	if err != nil {
+		_ = syscall.Kill(-pid, syscall.SIGKILL)
+		return nil, err
+	}
+
+	waitCtx, cancel := context.WithTimeout(ctx, socketReadyTimeout)
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, err := apiClient.GetVmmPing(waitCtx); err == nil {
+			log.V(2).Info("cloud-hypervisor is ready", "pid", pid)
+			return apiClient, nil
+		}
+		select {
+		case <-waitCtx.Done():
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			_ = os.Remove(sockPath)
+			_ = m.removePid(machineID)
+			return nil, fmt.Errorf("cloud-hypervisor for %s not ready within %s", machineID, socketReadyTimeout)
+		case <-ticker.C:
+		}
+	}
+}
+
+func (m *Manager) stopVMM(_ context.Context, machineID string) error {
+	log := m.log.WithValues("machineID", machineID)
+
+	delete(m.instances, machineID)
+
+	pid, ok := m.readPid(machineID)
+	if ok && processAlive(pid) {
+		log.V(1).Info("Terminating cloud-hypervisor", "pid", pid)
+		_ = syscall.Kill(-pid, syscall.SIGTERM)
+
+		deadline := time.Now().Add(terminateGracePeriod)
+		for time.Now().Before(deadline) && processAlive(pid) {
+			time.Sleep(100 * time.Millisecond)
+		}
+		if processAlive(pid) {
+			log.V(1).Info("Grace period elapsed, sending SIGKILL", "pid", pid)
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+		}
+	}
+
+	if err := os.Remove(m.paths.MachineChSocket(machineID)); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove socket: %w", err)
+	}
+	if err := os.Remove(m.paths.MachineChSerialSocket(machineID)); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove serial socket: %w", err)
+	}
+	if err := m.removePid(machineID); err != nil {
+		return fmt.Errorf("failed to remove pidfile: %w", err)
+	}
+	return nil
 }
 
 func wrapIfSocketClosed(err error) error {
@@ -168,13 +230,52 @@ func wrapIfSocketClosed(err error) error {
 	return err
 }
 
-func (m *Manager) GetVM(ctx context.Context, instanceID string) (*client.VmInfo, error) {
-	m.idMu.Lock(instanceID)
-	defer m.idMu.Unlock(instanceID)
+func (m *Manager) Status(ctx context.Context, machineID string) (*VMStatus, error) {
+	m.idMu.Lock(machineID)
+	defer m.idMu.Unlock(machineID)
 
-	log := m.log.WithValues("instanceID", instanceID)
+	if !m.adopt(ctx, machineID) {
+		return nil, ErrNotFound
+	}
 
-	apiClient, found := m.instances[instanceID]
+	info, err := m.getVM(ctx, machineID)
+	if err != nil {
+		return nil, err
+	}
+
+	status := &VMStatus{
+		State: mapVMState(info.State),
+	}
+	for _, disk := range ptr.Deref(info.Config.Disks, nil) {
+		if id := ptr.Deref(disk.Id, ""); id != "" {
+			status.Disks = append(status.Disks, id)
+		}
+	}
+	for _, dev := range ptr.Deref(info.Config.Devices, nil) {
+		if name := getNicName(ptr.Deref(dev.Id, "")); name != "" {
+			status.NetworkInterfaces = append(status.NetworkInterfaces, name)
+		}
+	}
+	return status, nil
+}
+
+func mapVMState(state client.VmInfoState) VMState {
+	switch state {
+	case client.Running:
+		return VMStateRunning
+	case client.Paused:
+		return VMStatePaused
+	case client.Created:
+		return VMStateCreated
+	default:
+		return VMStateShutoff
+	}
+}
+
+func (m *Manager) getVM(ctx context.Context, machineID string) (*client.VmInfo, error) {
+	log := m.log.WithValues("machineID", machineID)
+
+	apiClient, found := m.instances[machineID]
 	if !found {
 		return nil, ErrNotFound
 	}
@@ -196,21 +297,24 @@ func (m *Manager) GetVM(ctx context.Context, instanceID string) (*client.VmInfo,
 	return resp.JSON200, nil
 }
 
-func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
-	instanceID := ptr.Deref(machine.Spec.ApiSocketPath, "")
-	m.idMu.Lock(instanceID)
-	defer m.idMu.Unlock(instanceID)
+func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
+	m.idMu.Lock(machine.ID)
+	defer m.idMu.Unlock(machine.ID)
 
-	log := m.log.WithValues("instanceID", instanceID)
+	log := m.log.WithValues("machineID", machine.ID)
 
-	apiClient, found := m.instances[instanceID]
+	if err := m.ensureVMM(ctx, machine.ID); err != nil {
+		return fmt.Errorf("failed to ensure cloud-hypervisor is running: %w", err)
+	}
+
+	apiClient, found := m.instances[machine.ID]
 	if !found {
 		return ErrNotFound
 	}
 
 	payload := client.PayloadConfig{
 		Cmdline:   nil,
-		Firmware:  ptr.To(m.firmwarePath),
+		Firmware:  new(m.firmwarePath),
 		HostData:  nil,
 		Igvm:      nil,
 		Initramfs: nil,
@@ -218,11 +322,11 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 	}
 
 	platform := &client.PlatformConfig{
-		Uuid: ptr.To(machine.ID),
+		Uuid: new(machine.ID),
 	}
 
 	if machine.Spec.Ignition != nil {
-		platform.OemStrings = ptr.To([]string{
+		platform.OemStrings = new([]string{
 			b64.StdEncoding.EncodeToString(machine.Spec.Ignition),
 		})
 	}
@@ -234,16 +338,16 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 		}
 
 		disk := client.DiskConfig{
-			Id: ptr.To(vol.Handle),
+			Id: new(vol.Handle),
 		}
 
 		switch vol.Type {
 		case api.VolumeSocketType:
-			disk.VhostUser = ptr.To(true)
-			disk.VhostSocket = ptr.To(vol.Path)
-			disk.Readonly = ptr.To(false)
+			disk.VhostUser = new(true)
+			disk.VhostSocket = new(vol.Path)
+			disk.Readonly = new(false)
 		case api.VolumeFileType:
-			disk.Path = ptr.To(vol.Path)
+			disk.Path = new(vol.Path)
 		}
 
 		disks = append(disks, disk)
@@ -256,7 +360,7 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 		}
 
 		dev = append(dev, client.DeviceConfig{
-			Id:   ptr.To(getNicID(nic.Name)),
+			Id:   new(getNicID(nic.Name)),
 			Path: nic.Path,
 		})
 	}
@@ -271,13 +375,14 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 		Disks:   &disks,
 		Memory: &client.MemoryConfig{
 			Size:   machine.Spec.MemoryBytes,
-			Shared: ptr.To(true),
+			Shared: new(true),
 		},
 		Console: &client.ConsoleConfig{
 			Mode: "Off",
 		},
 		Serial: &client.ConsoleConfig{
-			Mode: "Tty",
+			Mode:   client.ConsoleConfigModeSocket,
+			Socket: new(m.paths.MachineChSerialSocket(machine.ID)),
 		},
 		Payload:  payload,
 		Platform: platform,
@@ -294,10 +399,13 @@ func (m *Manager) CreateVM(ctx context.Context, machine *api.Machine) error {
 	return nil
 }
 
-func (m *Manager) RemoveDevice(ctx context.Context, instanceID string, deviceID string) error {
+func (m *Manager) DetachDisk(ctx context.Context, instanceID string, handle string) error {
 	m.idMu.Lock(instanceID)
 	defer m.idMu.Unlock(instanceID)
+	return m.removeDevice(ctx, instanceID, handle)
+}
 
+func (m *Manager) removeDevice(ctx context.Context, instanceID string, deviceID string) error {
 	log := m.log.WithValues("instanceID", instanceID)
 
 	apiClient, found := m.instances[instanceID]
@@ -306,7 +414,7 @@ func (m *Manager) RemoveDevice(ctx context.Context, instanceID string, deviceID 
 	}
 
 	resp, err := apiClient.PutVmRemoveDeviceWithResponse(ctx, client.PutVmRemoveDeviceJSONRequestBody{
-		Id: ptr.To(deviceID),
+		Id: new(deviceID),
 	})
 	if err != nil {
 		return wrapIfSocketClosed(fmt.Errorf("failed to remove device: %w", err))
@@ -321,7 +429,7 @@ func (m *Manager) RemoveDevice(ctx context.Context, instanceID string, deviceID 
 	return nil
 }
 
-func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.NetworkInterfaceStatus) error {
+func (m *Manager) AttachNetworkInterface(ctx context.Context, instanceID string, nic *api.NetworkInterfaceStatus) error {
 	m.idMu.Lock(instanceID)
 	defer m.idMu.Unlock(instanceID)
 
@@ -337,7 +445,7 @@ func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.Networ
 	}
 
 	resp, err := apiClient.PutVmAddDeviceWithResponse(ctx, client.DeviceConfig{
-		Id:   ptr.To(getNicID(nic.Name)),
+		Id:   new(getNicID(nic.Name)),
 		Path: nic.Path,
 	})
 	if err != nil {
@@ -353,11 +461,13 @@ func (m *Manager) AddNIC(ctx context.Context, instanceID string, nic *api.Networ
 	return nil
 }
 
-func (m *Manager) RemoveNIC(ctx context.Context, instanceID string, nicName string) error {
-	return m.RemoveDevice(ctx, instanceID, getNicID(nicName))
+func (m *Manager) DetachNetworkInterface(ctx context.Context, instanceID string, nicName string) error {
+	m.idMu.Lock(instanceID)
+	defer m.idMu.Unlock(instanceID)
+	return m.removeDevice(ctx, instanceID, getNicID(nicName))
 }
 
-func (m *Manager) AddDisk(ctx context.Context, instanceID string, volume *api.VolumeStatus) error {
+func (m *Manager) AttachDisk(ctx context.Context, instanceID string, volume *api.VolumeStatus) error {
 	m.idMu.Lock(instanceID)
 	defer m.idMu.Unlock(instanceID)
 
@@ -373,16 +483,16 @@ func (m *Manager) AddDisk(ctx context.Context, instanceID string, volume *api.Vo
 	}
 
 	disk := client.DiskConfig{
-		Id: ptr.To(volume.Handle),
+		Id: new(volume.Handle),
 	}
 
 	switch volume.Type {
 	case api.VolumeSocketType:
-		disk.VhostUser = ptr.To(true)
-		disk.VhostSocket = ptr.To(volume.Path)
-		disk.Readonly = ptr.To(false)
+		disk.VhostUser = new(true)
+		disk.VhostSocket = new(volume.Path)
+		disk.Readonly = new(false)
 	case api.VolumeFileType:
-		disk.Path = ptr.To(volume.Path)
+		disk.Path = new(volume.Path)
 	}
 
 	resp, err := apiClient.PutVmAddDiskWithResponse(ctx, disk)
@@ -399,7 +509,7 @@ func (m *Manager) AddDisk(ctx context.Context, instanceID string, volume *api.Vo
 	return nil
 }
 
-func (m *Manager) PowerOn(ctx context.Context, instanceID string) error {
+func (m *Manager) Start(ctx context.Context, instanceID string) error {
 	m.idMu.Lock(instanceID)
 	defer m.idMu.Unlock(instanceID)
 
@@ -424,7 +534,7 @@ func (m *Manager) PowerOn(ctx context.Context, instanceID string) error {
 	return nil
 }
 
-func (m *Manager) PowerOff(ctx context.Context, instanceID string) error {
+func (m *Manager) Stop(ctx context.Context, instanceID string) error {
 	m.idMu.Lock(instanceID)
 	defer m.idMu.Unlock(instanceID)
 
@@ -455,25 +565,29 @@ func (m *Manager) Delete(ctx context.Context, instanceID string) error {
 
 	log := m.log.WithValues("instanceID", instanceID)
 
-	apiClient, found := m.instances[instanceID]
-	if !found {
-		return ErrNotFound
+	if apiClient, found := m.instances[instanceID]; found {
+		resp, err := apiClient.DeleteVMWithResponse(ctx)
+		switch {
+		case err != nil:
+			log.V(1).Info("Failed to delete vm, terminating anyway", "error", err.Error())
+		case validateStatus(resp.StatusCode()) != nil:
+			log.V(1).Info("Failed to delete vm, terminating anyway", "error", string(resp.Body))
+		default:
+			log.V(1).Info("Deleted vm definition")
+		}
 	}
 
-	resp, err := apiClient.DeleteVMWithResponse(ctx)
-	if err != nil {
-		return wrapIfSocketClosed(fmt.Errorf("failed to delete vm: %w", err))
-	}
-
-	if err := validateStatus(resp.StatusCode()); err != nil {
-		log.V(1).Info("Failed to delete vm", "error", string(resp.Body))
-		return err
-	}
-	log.V(1).Info("Deleted machine")
-
-	return nil
+	return m.stopVMM(ctx, instanceID)
 }
 
 func getNicID(nicName string) string {
 	return fmt.Sprintf("%s//%s", "NIC", nicName)
+}
+
+func getNicName(id string) string {
+	parts := strings.Split(id, "//")
+	if len(parts) != 2 || parts[0] != "NIC" {
+		return ""
+	}
+	return parts[1]
 }

@@ -42,6 +42,7 @@ const (
 var (
 	machineStore  *hostutils.Store[*api.Machine]
 	eventRecorder *recorder.Store
+	hostPaths     host.Paths
 )
 
 func TestControllers(t *testing.T) {
@@ -64,7 +65,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	Expect(os.Chmod(rootDir, 0755)).To(Succeed())
 	DeferCleanup(func() { os.RemoveAll(rootDir) })
 
-	hostPaths, err := host.PathsAt(rootDir)
+	hostPaths, err = host.PathsAt(rootDir)
 	Expect(err).NotTo(HaveOccurred())
 
 	platform, err := ocihostutils.Platform()
@@ -104,10 +105,10 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	chSocketDir := os.Getenv("CH_SOCKET_DIR")
-	if chSocketDir == "" {
-		log.V(1).Info("use default socket directory")
-		chSocketDir = "/run/chp/ch"
+	chBinPath := os.Getenv("CH_BIN_PATH")
+	if chBinPath == "" {
+		log.V(1).Info("use default cloud-hypervisor binary path")
+		chBinPath = "/usr/local/bin/cloud-hypervisor"
 	}
 
 	chFirmwarePath := os.Getenv("CH_FIRMWARE_PATH")
@@ -120,9 +121,8 @@ var _ = BeforeSuite(func(ctx context.Context) {
 		log.WithName("virtual-machine-manager"),
 		hostPaths,
 		vmm.ManagerOptions{
-			CHSocketsPath:     chSocketDir,
-			FirmwarePath:      chFirmwarePath,
-			ReservedInstances: nil,
+			ChBinaryPath: chBinPath,
+			FirmwarePath: chFirmwarePath,
 		},
 	)
 	Expect(err).NotTo(HaveOccurred())

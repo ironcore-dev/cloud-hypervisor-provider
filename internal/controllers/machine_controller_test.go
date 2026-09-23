@@ -63,18 +63,16 @@ var _ = Describe("MachineController", func() {
 				return false
 			}).Should(BeTrue())
 
-			By("waiting for the api socket path to be set")
-			Eventually(func(g Gomega) *string {
-				machine, err := machineStore.Get(ctx, machineID)
+			By("waiting for the cloud-hypervisor api socket to become ready")
+			sockPath := hostPaths.MachineChSocket(machineID)
+			Eventually(func(g Gomega) error {
+				c, err := vmm.NewUnixSocketClient(sockPath)
 				g.Expect(err).NotTo(HaveOccurred())
+				_, err = c.GetVmmPingWithResponse(ctx)
+				return err
+			}).Should(Succeed())
 
-				return machine.Spec.ApiSocketPath
-			}).ShouldNot(BeNil())
-
-			machine, err = machineStore.Get(ctx, machineID)
-			Expect(err).NotTo(HaveOccurred())
-
-			chClient, err := vmm.NewUnixSocketClient(ptr.Deref(machine.Spec.ApiSocketPath, ""))
+			chClient, err := vmm.NewUnixSocketClient(sockPath)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("checking that the vmm is ok")
@@ -94,7 +92,7 @@ var _ = Describe("MachineController", func() {
 
 			Expect(machineStore.Delete(ctx, machineID)).Should(Succeed())
 
-			By("waiting for the api socket path to be set")
+			By("waiting for the machine to be deleted")
 			Eventually(func(g Gomega) *time.Time {
 				machine, err := machineStore.Get(ctx, machineID)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -102,12 +100,16 @@ var _ = Describe("MachineController", func() {
 				return machine.DeletedAt
 			}).ShouldNot(BeNil())
 
-			Eventually(func(g Gomega) string {
+			By("verifying the cloud-hypervisor process is gone")
+			// After deletion the process is terminated, so the VM is either
+			// reported as not created or the socket no longer answers.
+			Eventually(func(g Gomega) {
 				resp, err := chClient.GetVmInfoWithResponse(ctx)
-				g.Expect(err).NotTo(HaveOccurred())
-
-				return string(resp.Body)
-			}).Should(ContainSubstring("VM is not created"))
+				if err != nil {
+					return
+				}
+				g.Expect(string(resp.Body)).To(ContainSubstring("VM is not created"))
+			}).Should(Succeed())
 		})
 	})
 })

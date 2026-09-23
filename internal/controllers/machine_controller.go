@@ -9,12 +9,10 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strings"
 	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/cloud-hypervisor/client"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
@@ -174,34 +172,17 @@ func (r *MachineReconciler) processNextWorkItem(ctx context.Context, log logr.Lo
 	return true
 }
 
-func getNicName(id string) *string {
-	parts := strings.Split(id, "//")
-	if len(parts) != 2 {
-		return nil
-	}
-
-	if parts[0] != "NIC" {
-		return nil
-	}
-
-	return &parts[1]
-}
-
 func (r *MachineReconciler) getMachineState(
 	ctx context.Context, machine *api.Machine,
-) (client.VmInfoState, error) {
-	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
-	vm, err := r.vmm.GetVM(ctx, apiSocket)
+) (vmm.VMState, error) {
+	vm, err := r.vmm.Status(ctx, machine.ID)
 	if err != nil {
 		if errors.Is(err, vmm.ErrVmNotCreated) || errors.Is(err, vmm.ErrNotFound) || errors.Is(err, vmm.ErrBrokenSocket) {
-			return client.Shutdown, nil
+			return vmm.VMStateShutoff, nil
 		}
-		return client.Shutdown, err
+		return vmm.VMStateShutoff, err
 	}
-	if vm.State == client.Running {
-		return client.Running, nil
-	}
-	return client.Shutdown, nil
+	return vm.State, nil
 }
 
 func getVolumeStatus(volumes []api.VolumeStatus, name string) api.VolumeStatus {
@@ -229,25 +210,23 @@ func getNICStatus(nics []api.NetworkInterfaceStatus, name string) api.NetworkInt
 }
 
 func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, machine *api.Machine) error {
-	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
-
 	state, err := r.getMachineState(ctx, machine)
 	if err != nil {
 		return err
 	}
 	log.V(1).Info("Got Machine state", "state", state)
 
-	if state == client.Running {
+	if state == vmm.VMStateRunning {
 		log.V(1).Info("Power machine off")
-		if err := r.vmm.PowerOff(ctx, apiSocket); err != nil {
+		if err := r.vmm.Stop(ctx, machine.ID); err != nil {
 			if !errors.Is(err, vmm.ErrNotFound) {
 				return fmt.Errorf("failed to power off machine: %w", err)
 			}
 		}
 	}
 
-	log.V(1).Info("Delete machine")
-	if err := r.vmm.Delete(ctx, apiSocket); err != nil {
+	log.V(1).Info("Delete machine and terminate cloud-hypervisor")
+	if err := r.vmm.Delete(ctx, machine.ID); err != nil {
 		if !errors.Is(err, vmm.ErrNotFound) {
 			return fmt.Errorf("failed to delete machine: %w", err)
 		}
@@ -272,10 +251,6 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 		if err := r.networkInterfacePlugin.Delete(ctx, nic.Name, machine.ID); err != nil {
 			return fmt.Errorf("failed to delete nic %s: %w", nic.Name, err)
 		}
-	}
-
-	if apiSocket != "" {
-		r.vmm.FreeApiSocket(ctx, apiSocket)
 	}
 
 	if err := os.RemoveAll(r.paths.MachineDir(machine.ID)); err != nil {
@@ -389,18 +364,9 @@ func (r *MachineReconciler) attachDetachDisks(
 	ctx context.Context,
 	log logr.Logger,
 	machine *api.Machine,
-	vm client.VmConfig,
+	vmStatus *vmm.VMStatus,
 ) error {
-	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
-	currentDevices := sets.New[string]()
-
-	for _, dev := range ptr.Deref(vm.Disks, []client.DiskConfig{}) {
-		id := dev.Id
-		if id == nil {
-			continue
-		}
-		currentDevices.Insert(ptr.Deref(id, ""))
-	}
+	currentDevices := sets.New[string](vmStatus.Disks...)
 
 	var updatedVolumeStatus []api.VolumeStatus
 	for _, vol := range machine.Spec.Volumes {
@@ -412,7 +378,7 @@ func (r *MachineReconciler) attachDetachDisks(
 					log.V(1).Info("Skip disk attachment: not prepared", "disk", vol.Name)
 					continue
 				}
-				if err := r.vmm.AddDisk(ctx, apiSocket, ptr.To(status)); err != nil {
+				if err := r.vmm.AttachDisk(ctx, machine.ID, ptr.To(status)); err != nil {
 					return fmt.Errorf("failed to add disk %s: %w", vol.Name, err)
 				}
 
@@ -422,7 +388,7 @@ func (r *MachineReconciler) attachDetachDisks(
 			updatedVolumeStatus = append(updatedVolumeStatus, status)
 		} else {
 			if currentDevices.Has(status.Handle) {
-				if err := r.vmm.RemoveDevice(ctx, apiSocket, status.Handle); err != nil {
+				if err := r.vmm.DetachDisk(ctx, machine.ID, status.Handle); err != nil {
 					return fmt.Errorf("failed to remove disk %s: %w", vol.Name, err)
 				}
 				log.V(1).Info("Removed disk", "disk", vol.Name)
@@ -450,18 +416,9 @@ func (r *MachineReconciler) attachDetachNICs(
 	ctx context.Context,
 	log logr.Logger,
 	machine *api.Machine,
-	vm client.VmConfig,
+	vmStatus *vmm.VMStatus,
 ) error {
-	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
-	currentDevices := sets.New[string]()
-
-	for _, dev := range ptr.Deref(vm.Devices, []client.DeviceConfig{}) {
-		name := getNicName(ptr.Deref(dev.Id, ""))
-		if name == nil {
-			continue
-		}
-		currentDevices.Insert(ptr.Deref(name, ""))
-	}
+	currentDevices := sets.New[string](vmStatus.NetworkInterfaces...)
 
 	var updatedNICStatus []api.NetworkInterfaceStatus
 	for _, nic := range machine.Spec.NetworkInterfaces {
@@ -474,7 +431,7 @@ func (r *MachineReconciler) attachDetachNICs(
 					continue
 				}
 
-				if err := r.vmm.AddNIC(ctx, apiSocket, ptr.To(status)); err != nil {
+				if err := r.vmm.AttachNetworkInterface(ctx, machine.ID, ptr.To(status)); err != nil {
 					return fmt.Errorf("failed to add disk %s: %w", nic.Name, err)
 				}
 
@@ -484,7 +441,7 @@ func (r *MachineReconciler) attachDetachNICs(
 			updatedNICStatus = append(updatedNICStatus, status)
 		} else {
 			if currentDevices.Has(status.Name) {
-				if err := r.vmm.RemoveNIC(ctx, apiSocket, nic.Name); err != nil {
+				if err := r.vmm.DetachNetworkInterface(ctx, machine.ID, nic.Name); err != nil {
 					return fmt.Errorf("failed to remove NIC %s: %w", status.Name, err)
 				}
 				log.V(1).Info("Removed NIC", "nic", status.Name)
@@ -560,24 +517,6 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		log.V(2).Info("Image is present")
 	}
 
-	if machine.Spec.ApiSocketPath == nil {
-		sock, err := r.vmm.GetFreeApiSocket()
-		if err != nil {
-			return fmt.Errorf("failed to get free api socket: %w", err)
-		}
-		machine.Spec.ApiSocketPath = sock
-		machine, err = r.machines.Update(ctx, machine)
-		if err != nil {
-			return fmt.Errorf("failed to update machine status: %w", err)
-		}
-	}
-
-	apiSocket := ptr.Deref(machine.Spec.ApiSocketPath, "")
-
-	if err := r.vmm.Ping(ctx, apiSocket); err != nil {
-		return fmt.Errorf("failed to ping vmm: %w", err)
-	}
-
 	if err := r.reconcileVolumes(ctx, log, machine); err != nil {
 		return fmt.Errorf("failed to reconcile volumes: %w", err)
 	}
@@ -586,15 +525,14 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return fmt.Errorf("failed to reconcile nics: %w", err)
 	}
 
-	vm, err := r.vmm.GetVM(ctx, apiSocket)
+	vm, err := r.vmm.Status(ctx, machine.ID)
 	if err != nil {
-		if !errors.Is(err, vmm.ErrVmNotCreated) {
+		if !errors.Is(err, vmm.ErrVmNotCreated) && !errors.Is(err, vmm.ErrNotFound) {
 			return fmt.Errorf("failed to get vm: %w", err)
 		}
 
 		log.V(1).Info("VM not created", "machine", machine.ID)
-
-		if err := r.vmm.CreateVM(ctx, machine); err != nil {
+		if err := r.vmm.Create(ctx, machine); err != nil {
 			log.V(1).Info("Failed to create VM", "machine", machine.ID)
 			return fmt.Errorf("failed to create VM: %w", err)
 		}
@@ -604,30 +542,26 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		return nil
 	}
 
-	if platform := ptr.Deref(vm.Config.Platform, client.PlatformConfig{}); ptr.Deref(platform.Uuid, "") != machine.ID {
-		return fmt.Errorf("machine and vm IDs do not match")
-	}
-
 	switch machine.Spec.Power {
 	case api.PowerStatePowerOn:
-		if vm.State != client.Running {
-			if err := r.vmm.PowerOn(ctx, apiSocket); err != nil {
+		if vm.State != vmm.VMStateRunning {
+			if err := r.vmm.Start(ctx, machine.ID); err != nil {
 				return fmt.Errorf("failed to power on VM: %w", err)
 			}
 		}
 	case api.PowerStatePowerOff:
-		if vm.State == client.Running {
-			if err := r.vmm.PowerOff(ctx, apiSocket); err != nil {
+		if vm.State == vmm.VMStateRunning {
+			if err := r.vmm.Stop(ctx, machine.ID); err != nil {
 				return fmt.Errorf("failed to power off VM: %w", err)
 			}
 		}
 	}
 
-	if err := r.attachDetachDisks(ctx, log, machine, vm.Config); err != nil {
+	if err := r.attachDetachDisks(ctx, log, machine, vm); err != nil {
 		return fmt.Errorf("failed to attach detach disks: %w", err)
 	}
 
-	if err := r.attachDetachNICs(ctx, log, machine, vm.Config); err != nil {
+	if err := r.attachDetachNICs(ctx, log, machine, vm); err != nil {
 		return fmt.Errorf("failed to attach detach disks: %w", err)
 	}
 

@@ -1,0 +1,23 @@
+[Unit]
+Description=Cloud Hypervisor Provider QMP monitor (qemu-storage-daemon)
+After=network-online.target systemd-tmpfiles-setup.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chp
+Group=chp
+
+ExecStart=/usr/bin/qemu-storage-daemon \
+  --chardev socket,id=qmpsock,path=/run/chp/qmp/sock,server=on,wait=off \
+  --monitor chardev=qmpsock
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 50); do [ -S /run/chp/qmp/sock ] && { chmod 0660 /run/chp/qmp/sock; exit 0; }; sleep 0.1; done'
+
+Restart=on-failure
+RestartSec=1
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

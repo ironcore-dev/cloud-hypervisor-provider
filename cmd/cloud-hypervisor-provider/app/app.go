@@ -37,7 +37,6 @@ import (
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -50,7 +49,7 @@ type Options struct {
 
 	MachineClasses MachineClassOptions
 
-	CloudHypervisorSocketsPath  string
+	CloudHypervisorBinPath      string
 	CloudHypervisorFirmwarePath string
 
 	QMPSocketPath string
@@ -83,10 +82,10 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	)
 
 	fs.StringVar(
-		&o.CloudHypervisorSocketsPath,
-		"cloud-hypervisor-sockets-path",
-		"/run/chp/ch/",
-		"Path to the cloud-hypervisor management sockets.",
+		&o.CloudHypervisorBinPath,
+		"cloud-hypervisor-bin-path",
+		"/usr/local/bin/cloud-hypervisor",
+		"Path to the cloud-hypervisor binary launched per machine.",
 	)
 
 	fs.StringVar(
@@ -239,25 +238,12 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	var socketsInUse []string
-	machines, err := machineStore.List(ctx)
-	if err != nil {
-		setupLog.Error(err, "failed to get initial machines")
-		return err
-	}
-	for _, machine := range machines {
-		if sock := ptr.Deref(machine.Spec.ApiSocketPath, ""); sock != "" {
-			socketsInUse = append(socketsInUse, sock)
-		}
-	}
-
 	virtualMachineManager, err := vmm.NewManager(
 		log.WithName("virtual-machine-manager"),
 		hostPaths,
 		vmm.ManagerOptions{
-			CHSocketsPath:     opts.CloudHypervisorSocketsPath,
-			FirmwarePath:      opts.CloudHypervisorFirmwarePath,
-			ReservedInstances: socketsInUse,
+			ChBinaryPath: opts.CloudHypervisorBinPath,
+			FirmwarePath: opts.CloudHypervisorFirmwarePath,
 		},
 	)
 	if err != nil {
