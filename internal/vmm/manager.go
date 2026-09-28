@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -44,12 +45,32 @@ func NewManager(log logr.Logger, paths host.Paths, opts ManagerOptions) (*Manage
 type Manager struct {
 	log logr.Logger
 
-	idMu      *utilssync.MutexMap[string]
-	instances map[string]*client.ClientWithResponses
+	idMu        *utilssync.MutexMap[string]
+	instancesMu sync.RWMutex
+	instances   map[string]*client.ClientWithResponses
 
 	paths        host.Paths
 	chBinaryPath string
 	firmwarePath string
+}
+
+func (m *Manager) getInstance(machineID string) (*client.ClientWithResponses, bool) {
+	m.instancesMu.RLock()
+	defer m.instancesMu.RUnlock()
+	apiClient, ok := m.instances[machineID]
+	return apiClient, ok
+}
+
+func (m *Manager) setInstance(machineID string, apiClient *client.ClientWithResponses) {
+	m.instancesMu.Lock()
+	defer m.instancesMu.Unlock()
+	m.instances[machineID] = apiClient
+}
+
+func (m *Manager) deleteInstance(machineID string) {
+	m.instancesMu.Lock()
+	defer m.instancesMu.Unlock()
+	delete(m.instances, machineID)
 }
 
 var (
@@ -76,19 +97,19 @@ type VMStatus struct {
 func (m *Manager) ensureVMM(ctx context.Context, machineID string) error {
 	log := m.log.WithValues("machineID", machineID)
 
-	if apiClient, ok := m.instances[machineID]; ok {
+	if apiClient, ok := m.getInstance(machineID); ok {
 		if _, err := apiClient.GetVmmPing(ctx); err == nil {
 			return nil
 		}
 		log.V(1).Info("Tracked client is stale, dropping")
-		delete(m.instances, machineID)
+		m.deleteInstance(machineID)
 	}
 
 	sockPath := m.paths.MachineChSocket(machineID)
 	if apiClient, err := NewUnixSocketClient(sockPath); err == nil {
 		if _, err := apiClient.GetVmmPing(ctx); err == nil {
 			log.V(1).Info("Adopted running cloud-hypervisor", "socketPath", sockPath)
-			m.instances[machineID] = apiClient
+			m.setInstance(machineID, apiClient)
 			return nil
 		}
 	}
@@ -101,12 +122,12 @@ func (m *Manager) ensureVMM(ctx context.Context, machineID string) error {
 	if err != nil {
 		return err
 	}
-	m.instances[machineID] = apiClient
+	m.setInstance(machineID, apiClient)
 	return nil
 }
 
 func (m *Manager) adopt(ctx context.Context, machineID string) bool {
-	if _, ok := m.instances[machineID]; ok {
+	if _, ok := m.getInstance(machineID); ok {
 		return true
 	}
 	sockPath := m.paths.MachineChSocket(machineID)
@@ -118,7 +139,7 @@ func (m *Manager) adopt(ctx context.Context, machineID string) bool {
 		return false
 	}
 	m.log.V(1).Info("Adopted running cloud-hypervisor", "machineID", machineID, "socketPath", sockPath)
-	m.instances[machineID] = apiClient
+	m.setInstance(machineID, apiClient)
 	return true
 }
 
@@ -194,7 +215,7 @@ func (m *Manager) launch(ctx context.Context, machineID string) (*client.ClientW
 func (m *Manager) stopVMM(_ context.Context, machineID string) error {
 	log := m.log.WithValues("machineID", machineID)
 
-	delete(m.instances, machineID)
+	m.deleteInstance(machineID)
 
 	pid, ok := m.readPid(machineID)
 	if ok && processAlive(pid) {
@@ -275,7 +296,7 @@ func mapVMState(state client.VmInfoState) VMState {
 func (m *Manager) getVM(ctx context.Context, machineID string) (*client.VmInfo, error) {
 	log := m.log.WithValues("machineID", machineID)
 
-	apiClient, found := m.instances[machineID]
+	apiClient, found := m.getInstance(machineID)
 	if !found {
 		return nil, ErrNotFound
 	}
@@ -307,7 +328,7 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 		return fmt.Errorf("failed to ensure cloud-hypervisor is running: %w", err)
 	}
 
-	apiClient, found := m.instances[machine.ID]
+	apiClient, found := m.getInstance(machine.ID)
 	if !found {
 		return ErrNotFound
 	}
@@ -408,7 +429,7 @@ func (m *Manager) DetachDisk(ctx context.Context, instanceID string, handle stri
 func (m *Manager) removeDevice(ctx context.Context, instanceID string, deviceID string) error {
 	log := m.log.WithValues("instanceID", instanceID)
 
-	apiClient, found := m.instances[instanceID]
+	apiClient, found := m.getInstance(instanceID)
 	if !found {
 		return ErrNotFound
 	}
@@ -439,7 +460,7 @@ func (m *Manager) AttachNetworkInterface(ctx context.Context, instanceID string,
 		return fmt.Errorf("nic %s is not attached", nic.Name)
 	}
 
-	apiClient, found := m.instances[instanceID]
+	apiClient, found := m.getInstance(instanceID)
 	if !found {
 		return ErrNotFound
 	}
@@ -477,7 +498,7 @@ func (m *Manager) AttachDisk(ctx context.Context, instanceID string, volume *api
 		return fmt.Errorf("volume %s is not prepared", volume.Handle)
 	}
 
-	apiClient, found := m.instances[instanceID]
+	apiClient, found := m.getInstance(instanceID)
 	if !found {
 		return ErrNotFound
 	}
@@ -515,7 +536,7 @@ func (m *Manager) Start(ctx context.Context, instanceID string) error {
 
 	log := m.log.WithValues("instanceID", instanceID)
 
-	apiClient, found := m.instances[instanceID]
+	apiClient, found := m.getInstance(instanceID)
 	if !found {
 		return ErrNotFound
 	}
@@ -540,7 +561,7 @@ func (m *Manager) Stop(ctx context.Context, instanceID string) error {
 
 	log := m.log.WithValues("instanceID", instanceID)
 
-	apiClient, found := m.instances[instanceID]
+	apiClient, found := m.getInstance(instanceID)
 	if !found {
 		return ErrNotFound
 	}
@@ -565,7 +586,7 @@ func (m *Manager) Delete(ctx context.Context, instanceID string) error {
 
 	log := m.log.WithValues("instanceID", instanceID)
 
-	if apiClient, found := m.instances[instanceID]; found {
+	if apiClient, found := m.getInstance(instanceID); found {
 		resp, err := apiClient.DeleteVMWithResponse(ctx)
 		switch {
 		case err != nil:

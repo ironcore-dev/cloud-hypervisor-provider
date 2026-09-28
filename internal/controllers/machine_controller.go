@@ -432,7 +432,7 @@ func (r *MachineReconciler) attachDetachNICs(
 				}
 
 				if err := r.vmm.AttachNetworkInterface(ctx, machine.ID, ptr.To(status)); err != nil {
-					return fmt.Errorf("failed to add disk %s: %w", nic.Name, err)
+					return fmt.Errorf("failed to add nic %s: %w", nic.Name, err)
 				}
 
 				log.V(1).Info("Added NIC", "nic", nic.Name)
@@ -562,7 +562,7 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 	}
 
 	if err := r.attachDetachNICs(ctx, log, machine, vm); err != nil {
-		return fmt.Errorf("failed to attach detach disks: %w", err)
+		return fmt.Errorf("failed to attach detach nics: %w", err)
 	}
 
 	switch machine.Spec.Power {
