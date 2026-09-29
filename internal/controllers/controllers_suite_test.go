@@ -36,7 +36,7 @@ const (
 	eventuallyTimeout    = 180 * time.Second
 	pollingInterval      = 50 * time.Millisecond
 	consistentlyDuration = 1 * time.Second
-	osImage              = "ghcr.io/ironcore-dev/os-images/virtualization/gardenlinux:latest"
+	osImage              = "ghcr.io/ironcore-dev/gardenlinux/gardener:2150.11.0-kvm"
 )
 
 var (
