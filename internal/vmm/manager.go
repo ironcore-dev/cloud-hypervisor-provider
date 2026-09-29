@@ -409,7 +409,7 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 		Platform: platform,
 	})
 	if err != nil {
-		return wrapIfSocketClosed(fmt.Errorf("failed to get vm: %w", err))
+		return wrapIfSocketClosed(fmt.Errorf("failed to create vm: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
@@ -470,7 +470,7 @@ func (m *Manager) AttachNetworkInterface(ctx context.Context, instanceID string,
 		Path: nic.Path,
 	})
 	if err != nil {
-		return wrapIfSocketClosed(fmt.Errorf("failed to remove device: %w", err))
+		return wrapIfSocketClosed(fmt.Errorf("failed to add device: %w", err))
 	}
 
 	if err := validateStatus(resp.StatusCode()); err != nil {
