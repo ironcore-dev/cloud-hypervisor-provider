@@ -19,31 +19,66 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
-// Defines values for ConsoleConfigMode.
+// Defines values for ConsoleMode.
 const (
-	ConsoleConfigModeFile   ConsoleConfigMode = "File"
-	ConsoleConfigModeNull   ConsoleConfigMode = "Null"
-	ConsoleConfigModeOff    ConsoleConfigMode = "Off"
-	ConsoleConfigModePty    ConsoleConfigMode = "Pty"
-	ConsoleConfigModeSocket ConsoleConfigMode = "Socket"
-	ConsoleConfigModeTty    ConsoleConfigMode = "Tty"
+	ConsoleModeFile   ConsoleMode = "File"
+	ConsoleModeNull   ConsoleMode = "Null"
+	ConsoleModeOff    ConsoleMode = "Off"
+	ConsoleModePty    ConsoleMode = "Pty"
+	ConsoleModeSocket ConsoleMode = "Socket"
+	ConsoleModeTty    ConsoleMode = "Tty"
 )
 
-// Defines values for DebugConsoleConfigMode.
+// Defines values for CoreSchedulingMode.
 const (
-	DebugConsoleConfigModeFile DebugConsoleConfigMode = "File"
-	DebugConsoleConfigModeNull DebugConsoleConfigMode = "Null"
-	DebugConsoleConfigModeOff  DebugConsoleConfigMode = "Off"
-	DebugConsoleConfigModePty  DebugConsoleConfigMode = "Pty"
-	DebugConsoleConfigModeTty  DebugConsoleConfigMode = "Tty"
+	CoreSchedulingModeOff  CoreSchedulingMode = "Off"
+	CoreSchedulingModeVcpu CoreSchedulingMode = "Vcpu"
+	CoreSchedulingModeVm   CoreSchedulingMode = "Vm"
 )
 
-// Defines values for VmInfoState.
+// Defines values for ImageType.
 const (
-	Created  VmInfoState = "Created"
-	Paused   VmInfoState = "Paused"
-	Running  VmInfoState = "Running"
-	Shutdown VmInfoState = "Shutdown"
+	FixedVhd ImageType = "FixedVhd"
+	FlatVmdk ImageType = "FlatVmdk"
+	Qcow2    ImageType = "Qcow2"
+	Raw      ImageType = "Raw"
+	Unknown  ImageType = "Unknown"
+	Vhdx     ImageType = "Vhdx"
+)
+
+// Defines values for LockGranularity.
+const (
+	ByteRange LockGranularity = "ByteRange"
+	Full      LockGranularity = "Full"
+)
+
+// Defines values for MemoryRestoreMode.
+const (
+	Copy        MemoryRestoreMode = "Copy"
+	CopyOnWrite MemoryRestoreMode = "CopyOnWrite"
+	OnDemand    MemoryRestoreMode = "OnDemand"
+)
+
+// Defines values for MigrationMode.
+const (
+	MemFDs   MigrationMode = "MemFDs"
+	Postcopy MigrationMode = "Postcopy"
+	Precopy  MigrationMode = "Precopy"
+)
+
+// Defines values for TimeoutStrategy.
+const (
+	Cancel TimeoutStrategy = "Cancel"
+	Ignore TimeoutStrategy = "Ignore"
+)
+
+// Defines values for VmState.
+const (
+	BreakPoint VmState = "BreakPoint"
+	Created    VmState = "Created"
+	Paused     VmState = "Paused"
+	Running    VmState = "Running"
+	Shutdown   VmState = "Shutdown"
 )
 
 // BalloonConfig defines model for BalloonConfig.
@@ -52,20 +87,91 @@ type BalloonConfig struct {
 	DeflateOnOom *bool `json:"deflate_on_oom,omitempty"`
 
 	// FreePageReporting Enable guest to report free pages.
-	FreePageReporting *bool `json:"free_page_reporting,omitempty"`
-	Size              int64 `json:"size"`
+	FreePageReporting *bool   `json:"free_page_reporting,omitempty"`
+	Id                *string `json:"id,omitempty"`
+	Iommu             *bool   `json:"iommu,omitempty"`
+	PciDeviceId       *uint8  `json:"pci_device_id,omitempty"`
+	PciSegment        *int16  `json:"pci_segment,omitempty"`
+	Size              int64   `json:"size"`
+}
+
+// BalloonStats defines model for BalloonStats.
+type BalloonStats struct {
+	// AllocStalls Number of guest memory allocation stalls reported by Linux
+	AllocStalls *int64 `json:"alloc_stalls,omitempty"`
+
+	// AsyncReclaims Memory reclaimed asynchronously by Linux in bytes
+	AsyncReclaims *int64 `json:"async_reclaims,omitempty"`
+
+	// AsyncScans Memory scanned asynchronously by Linux in bytes
+	AsyncScans *int64 `json:"async_scans,omitempty"`
+
+	// AvailableMemory Guest memory available without swapping in bytes
+	AvailableMemory *int64 `json:"available_memory,omitempty"`
+
+	// DirectReclaims Memory reclaimed directly by Linux in bytes
+	DirectReclaims *int64 `json:"direct_reclaims,omitempty"`
+
+	// DirectScans Memory scanned directly by Linux in bytes
+	DirectScans *int64 `json:"direct_scans,omitempty"`
+
+	// DiskCaches Reclaimable guest disk caches in bytes
+	DiskCaches *int64 `json:"disk_caches,omitempty"`
+
+	// FreeMemory Unused guest memory in bytes
+	FreeMemory *int64 `json:"free_memory,omitempty"`
+
+	// HugetlbAllocations Number of successful hugetlb allocations
+	HugetlbAllocations *int64 `json:"hugetlb_allocations,omitempty"`
+
+	// HugetlbFailures Number of failed hugetlb allocations
+	HugetlbFailures *int64 `json:"hugetlb_failures,omitempty"`
+
+	// MajorFaults Number of major page faults
+	MajorFaults *int64 `json:"major_faults,omitempty"`
+
+	// MinorFaults Number of minor page faults
+	MinorFaults *int64 `json:"minor_faults,omitempty"`
+
+	// OomKills Number of guest OOM kills reported by Linux
+	OomKills *int64 `json:"oom_kills,omitempty"`
+
+	// SwapIn Memory swapped into the guest in bytes
+	SwapIn *int64 `json:"swap_in,omitempty"`
+
+	// SwapOut Memory swapped out by the guest in bytes
+	SwapOut *int64 `json:"swap_out,omitempty"`
+
+	// TotalMemory Total guest memory in bytes
+	TotalMemory *int64 `json:"total_memory,omitempty"`
+}
+
+// BalloonStatsResponse defines model for BalloonStatsResponse.
+type BalloonStatsResponse struct {
+	// BalloonActual Current balloon size in bytes
+	BalloonActual int64 `json:"balloon_actual"`
+
+	// LastUpdate Host UNIX timestamp in milliseconds when statistics were last updated, or zero before the first sample
+	LastUpdate int64        `json:"last_update"`
+	Stats      BalloonStats `json:"stats"`
 }
 
 // ConsoleConfig defines model for ConsoleConfig.
 type ConsoleConfig struct {
-	File   *string           `json:"file,omitempty"`
-	Iommu  *bool             `json:"iommu,omitempty"`
-	Mode   ConsoleConfigMode `json:"mode"`
-	Socket *string           `json:"socket,omitempty"`
+	File        *string     `json:"file,omitempty"`
+	Id          *string     `json:"id,omitempty"`
+	Iommu       *bool       `json:"iommu,omitempty"`
+	Mode        ConsoleMode `json:"mode"`
+	PciDeviceId *uint8      `json:"pci_device_id,omitempty"`
+	PciSegment  *int16      `json:"pci_segment,omitempty"`
+	Socket      *string     `json:"socket,omitempty"`
 }
 
-// ConsoleConfigMode defines model for ConsoleConfig.Mode.
-type ConsoleConfigMode string
+// ConsoleMode defines model for ConsoleMode.
+type ConsoleMode string
+
+// CoreSchedulingMode defines model for CoreSchedulingMode.
+type CoreSchedulingMode string
 
 // CpuAffinity defines model for CpuAffinity.
 type CpuAffinity struct {
@@ -88,32 +194,38 @@ type CpuTopology struct {
 
 // CpusConfig defines model for CpusConfig.
 type CpusConfig struct {
-	Affinity    *[]CpuAffinity `json:"affinity,omitempty"`
-	BootVcpus   int            `json:"boot_vcpus"`
-	Features    *CpuFeatures   `json:"features,omitempty"`
-	KvmHyperv   *bool          `json:"kvm_hyperv,omitempty"`
-	MaxPhysBits *int           `json:"max_phys_bits,omitempty"`
-	MaxVcpus    int            `json:"max_vcpus"`
-	Topology    *CpuTopology   `json:"topology,omitempty"`
+	Affinity       *[]CpuAffinity      `json:"affinity,omitempty"`
+	BootVcpus      int                 `json:"boot_vcpus"`
+	CoreScheduling *CoreSchedulingMode `json:"core_scheduling,omitempty"`
+	Features       *CpuFeatures        `json:"features,omitempty"`
+	KvmHyperv      *bool               `json:"kvm_hyperv,omitempty"`
+	MaxPhysBits    *int                `json:"max_phys_bits,omitempty"`
+	MaxVcpus       int                 `json:"max_vcpus"`
+	Nested         *bool               `json:"nested,omitempty"`
+	Topology       *CpuTopology        `json:"topology,omitempty"`
 }
 
 // DebugConsoleConfig defines model for DebugConsoleConfig.
 type DebugConsoleConfig struct {
-	File   *string                `json:"file,omitempty"`
-	Iobase *int                   `json:"iobase,omitempty"`
-	Mode   DebugConsoleConfigMode `json:"mode"`
+	File   *string     `json:"file,omitempty"`
+	Iobase *int        `json:"iobase,omitempty"`
+	Mode   ConsoleMode `json:"mode"`
 }
-
-// DebugConsoleConfigMode defines model for DebugConsoleConfig.Mode.
-type DebugConsoleConfigMode string
 
 // DeviceConfig defines model for DeviceConfig.
 type DeviceConfig struct {
-	Id                 *string `json:"id,omitempty"`
-	Iommu              *bool   `json:"iommu,omitempty"`
-	Path               string  `json:"path"`
-	PciSegment         *int16  `json:"pci_segment,omitempty"`
-	XNvGpudirectClique *int8   `json:"x_nv_gpudirect_clique,omitempty"`
+	Id    *string `json:"id,omitempty"`
+	Iommu *bool   `json:"iommu,omitempty"`
+
+	// Path Sysfs path of the VFIO device. Exactly one of `path` or an
+	// externally-opened cdev FD must be supplied; an FD is passed
+	// out of band via SCM_RIGHTS on the UNIX domain socket, never
+	// in this body.
+	Path               *string  `json:"path,omitempty"`
+	PciDeviceId        *uint8   `json:"pci_device_id,omitempty"`
+	PciSegment         *int16   `json:"pci_segment,omitempty"`
+	XExcludeMmapBars   *[]int64 `json:"x_exclude_mmap_bars,omitempty"`
+	XNvGpudirectClique *int8    `json:"x_nv_gpudirect_clique,omitempty"`
 }
 
 // DeviceNode defines model for DeviceNode.
@@ -126,39 +238,86 @@ type DeviceNode struct {
 
 // DiskConfig defines model for DiskConfig.
 type DiskConfig struct {
-	Direct         *bool                `json:"direct,omitempty"`
-	Id             *string              `json:"id,omitempty"`
-	Iommu          *bool                `json:"iommu,omitempty"`
-	NumQueues      *int                 `json:"num_queues,omitempty"`
-	Path           *string              `json:"path,omitempty"`
-	PciSegment     *int16               `json:"pci_segment,omitempty"`
-	QueueAffinity  *[]VirtQueueAffinity `json:"queue_affinity,omitempty"`
-	QueueSize      *int                 `json:"queue_size,omitempty"`
-	RateLimitGroup *string              `json:"rate_limit_group,omitempty"`
+	BackingFiles   *bool   `json:"backing_files,omitempty"`
+	Direct         *bool   `json:"direct,omitempty"`
+	GuestBlockSize *int    `json:"guest_block_size,omitempty"`
+	Id             *string `json:"id,omitempty"`
+
+	// ImageType Unknown is only valid for vhost-user disks.
+	ImageType       *ImageType           `json:"image_type,omitempty"`
+	Iommu           *bool                `json:"iommu,omitempty"`
+	LockGranularity *LockGranularity     `json:"lock_granularity,omitempty"`
+	NumQueues       *int                 `json:"num_queues,omitempty"`
+	Path            *string              `json:"path,omitempty"`
+	PciDeviceId     *uint8               `json:"pci_device_id,omitempty"`
+	PciSegment      *int16               `json:"pci_segment,omitempty"`
+	QueueAffinity   *[]VirtQueueAffinity `json:"queue_affinity,omitempty"`
+	QueueSize       *int                 `json:"queue_size,omitempty"`
+	RateLimitGroup  *string              `json:"rate_limit_group,omitempty"`
 
 	// RateLimiterConfig Defines an IO rate limiter with independent bytes/s and ops/s limits. Limits are defined by configuring each of the _bandwidth_ and _ops_ token buckets.
 	RateLimiterConfig *RateLimiterConfig `json:"rate_limiter_config,omitempty"`
 	Readonly          *bool              `json:"readonly,omitempty"`
 	Serial            *string            `json:"serial,omitempty"`
+	Sparse            *bool              `json:"sparse,omitempty"`
 	VhostSocket       *string            `json:"vhost_socket,omitempty"`
 	VhostUser         *bool              `json:"vhost_user,omitempty"`
 }
 
 // FsConfig defines model for FsConfig.
 type FsConfig struct {
-	Id         *string `json:"id,omitempty"`
-	NumQueues  int     `json:"num_queues"`
-	PciSegment *int16  `json:"pci_segment,omitempty"`
-	QueueSize  int     `json:"queue_size"`
-	Socket     string  `json:"socket"`
-	Tag        string  `json:"tag"`
+	Id          *string `json:"id,omitempty"`
+	NumQueues   int     `json:"num_queues"`
+	PciDeviceId *uint8  `json:"pci_device_id,omitempty"`
+	PciSegment  *int16  `json:"pci_segment,omitempty"`
+	QueueSize   int     `json:"queue_size"`
+	Socket      string  `json:"socket"`
+	Tag         string  `json:"tag"`
 }
+
+// FwCfgConfig fw_cfg device configuration (feature-gated in cloud-hypervisor).
+type FwCfgConfig struct {
+	AcpiTables *bool          `json:"acpi_tables,omitempty"`
+	Cmdline    *bool          `json:"cmdline,omitempty"`
+	E820       *bool          `json:"e820,omitempty"`
+	Initramfs  *bool          `json:"initramfs,omitempty"`
+	Items      *FwCfgItemList `json:"items,omitempty"`
+	Kernel     *bool          `json:"kernel,omitempty"`
+}
+
+// FwCfgItem A single fw_cfg item; carries exactly one of file or string.
+type FwCfgItem struct {
+	File   *string `json:"file,omitempty"`
+	Name   string  `json:"name"`
+	String *string `json:"string,omitempty"`
+}
+
+// FwCfgItemList defines model for FwCfgItemList.
+type FwCfgItemList struct {
+	ItemList *[]FwCfgItem `json:"item_list,omitempty"`
+}
+
+// GenericVhostUserConfig defines model for GenericVhostUserConfig.
+type GenericVhostUserConfig struct {
+	DeviceType  uint32   `json:"device_type"`
+	Id          *string  `json:"id,omitempty"`
+	PciDeviceId *uint8   `json:"pci_device_id,omitempty"`
+	PciSegment  *int16   `json:"pci_segment,omitempty"`
+	QueueSizes  []uint16 `json:"queue_sizes"`
+	Socket      string   `json:"socket"`
+}
+
+// ImageType Unknown is only valid for vhost-user disks.
+type ImageType string
 
 // LandlockConfig defines model for LandlockConfig.
 type LandlockConfig struct {
 	Access string `json:"access"`
 	Path   string `json:"path"`
 }
+
+// LockGranularity defines model for LockGranularity.
+type LockGranularity string
 
 // MemoryConfig defines model for MemoryConfig.
 type MemoryConfig struct {
@@ -169,11 +328,15 @@ type MemoryConfig struct {
 	Hugepages      *bool               `json:"hugepages,omitempty"`
 	Mergeable      *bool               `json:"mergeable,omitempty"`
 	Prefault       *bool               `json:"prefault,omitempty"`
+	Reserve        *bool               `json:"reserve,omitempty"`
 	Shared         *bool               `json:"shared,omitempty"`
 	Size           int64               `json:"size"`
 	Thp            *bool               `json:"thp,omitempty"`
 	Zones          *[]MemoryZoneConfig `json:"zones,omitempty"`
 }
+
+// MemoryRestoreMode defines model for MemoryRestoreMode.
+type MemoryRestoreMode string
 
 // MemoryZoneConfig defines model for MemoryZoneConfig.
 type MemoryZoneConfig struct {
@@ -186,9 +349,13 @@ type MemoryZoneConfig struct {
 	Id             string  `json:"id"`
 	Mergeable      *bool   `json:"mergeable,omitempty"`
 	Prefault       *bool   `json:"prefault,omitempty"`
+	Reserve        *bool   `json:"reserve,omitempty"`
 	Shared         *bool   `json:"shared,omitempty"`
 	Size           int64   `json:"size"`
 }
+
+// MigrationMode Memory transfer mode. MemFDs passes the guest memory backing file descriptors to the destination over a UNIX socket. MemFDs requires every guest memory region to use shared memory or hugepage backing. Precopy transfers all guest memory before the destination resumes. Postcopy resumes the destination first and faults guest pages in on demand.
+type MigrationMode string
 
 // NetConfig defines model for NetConfig.
 type NetConfig struct {
@@ -201,11 +368,15 @@ type NetConfig struct {
 	Mac *string `json:"mac,omitempty"`
 
 	// Mask Must be a valid IPv4 netmask if ip is an IPv4 address or a valid IPv6 netmask if ip is an IPv6 address.
-	Mask       *string `json:"mask,omitempty"`
-	Mtu        *int    `json:"mtu,omitempty"`
-	NumQueues  *int    `json:"num_queues,omitempty"`
-	PciSegment *int16  `json:"pci_segment,omitempty"`
-	QueueSize  *int    `json:"queue_size,omitempty"`
+	Mask        *string `json:"mask,omitempty"`
+	Mtu         *int    `json:"mtu,omitempty"`
+	NumQueues   *int    `json:"num_queues,omitempty"`
+	OffloadCsum *bool   `json:"offload_csum,omitempty"`
+	OffloadTso  *bool   `json:"offload_tso,omitempty"`
+	OffloadUfo  *bool   `json:"offload_ufo,omitempty"`
+	PciDeviceId *uint8  `json:"pci_device_id,omitempty"`
+	PciSegment  *int16  `json:"pci_segment,omitempty"`
+	QueueSize   *int    `json:"queue_size,omitempty"`
 
 	// RateLimiterConfig Defines an IO rate limiter with independent bytes/s and ops/s limits. Limits are defined by configuring each of the _bandwidth_ and _ops_ token buckets.
 	RateLimiterConfig *RateLimiterConfig `json:"rate_limiter_config,omitempty"`
@@ -217,12 +388,12 @@ type NetConfig struct {
 
 // NumaConfig defines model for NumaConfig.
 type NumaConfig struct {
-	Cpus           *[]int32        `json:"cpus,omitempty"`
-	Distances      *[]NumaDistance `json:"distances,omitempty"`
-	GuestNumaId    int32           `json:"guest_numa_id"`
-	MemoryZones    *[]string       `json:"memory_zones,omitempty"`
-	PciSegments    *[]int32        `json:"pci_segments,omitempty"`
-	SgxEpcSections *[]string       `json:"sgx_epc_sections,omitempty"`
+	Cpus        *[]int32        `json:"cpus,omitempty"`
+	DeviceId    *string         `json:"device_id,omitempty"`
+	Distances   *[]NumaDistance `json:"distances,omitempty"`
+	GuestNumaId int32           `json:"guest_numa_id"`
+	MemoryZones *[]string       `json:"memory_zones,omitempty"`
+	PciSegments *[]int32        `json:"pci_segments,omitempty"`
 }
 
 // NumaDistance defines model for NumaDistance.
@@ -233,12 +404,15 @@ type NumaDistance struct {
 
 // PayloadConfig Payloads to boot in guest
 type PayloadConfig struct {
-	Cmdline   *string `json:"cmdline,omitempty"`
-	Firmware  *string `json:"firmware,omitempty"`
-	HostData  *string `json:"host_data,omitempty"`
-	Igvm      *string `json:"igvm,omitempty"`
-	Initramfs *string `json:"initramfs,omitempty"`
-	Kernel    *string `json:"kernel,omitempty"`
+	Cmdline  *string `json:"cmdline,omitempty"`
+	Firmware *string `json:"firmware,omitempty"`
+
+	// FwCfgConfig fw_cfg device configuration (feature-gated in cloud-hypervisor).
+	FwCfgConfig *FwCfgConfig `json:"fw_cfg_config,omitempty"`
+	HostData    *string      `json:"host_data,omitempty"`
+	Igvm        *string      `json:"igvm,omitempty"`
+	Initramfs   *string      `json:"initramfs,omitempty"`
+	Kernel      *string      `json:"kernel,omitempty"`
 }
 
 // PciDeviceInfo Information about a PCI device
@@ -256,14 +430,26 @@ type PciSegmentConfig struct {
 
 // PlatformConfig defines model for PlatformConfig.
 type PlatformConfig struct {
-	IommuAddressWidth *uint8    `json:"iommu_address_width,omitempty"`
-	IommuSegments     *[]int16  `json:"iommu_segments,omitempty"`
-	NumPciSegments    *int16    `json:"num_pci_segments,omitempty"`
-	OemStrings        *[]string `json:"oem_strings,omitempty"`
-	SerialNumber      *string   `json:"serial_number,omitempty"`
-	SevSnp            *bool     `json:"sev_snp,omitempty"`
-	Tdx               *bool     `json:"tdx,omitempty"`
-	Uuid              *string   `json:"uuid,omitempty"`
+	ChassisAssetTag       *string   `json:"chassis_asset_tag,omitempty"`
+	IommuAddressWidthBits *uint8    `json:"iommu_address_width_bits,omitempty"`
+	IommuSegments         *[]int16  `json:"iommu_segments,omitempty"`
+	Iommufd               *bool     `json:"iommufd,omitempty"`
+	NumPciSegments        *int16    `json:"num_pci_segments,omitempty"`
+	OemStrings            *[]string `json:"oem_strings,omitempty"`
+	// Deprecated:
+	SerialNumber       *string `json:"serial_number,omitempty"`
+	SevSnp             *bool   `json:"sev_snp,omitempty"`
+	SystemFamily       *string `json:"system_family,omitempty"`
+	SystemManufacturer *string `json:"system_manufacturer,omitempty"`
+	SystemProductName  *string `json:"system_product_name,omitempty"`
+	SystemSerialNumber *string `json:"system_serial_number,omitempty"`
+	SystemSkuNumber    *string `json:"system_sku_number,omitempty"`
+	SystemUuid         *string `json:"system_uuid,omitempty"`
+	SystemVersion      *string `json:"system_version,omitempty"`
+	Tdx                *bool   `json:"tdx,omitempty"`
+	// Deprecated:
+	Uuid       *string `json:"uuid,omitempty"`
+	VfioP2pDma *bool   `json:"vfio_p2p_dma,omitempty"`
 }
 
 // PmemConfig defines model for PmemConfig.
@@ -272,6 +458,7 @@ type PmemConfig struct {
 	File          string  `json:"file"`
 	Id            *string `json:"id,omitempty"`
 	Iommu         *bool   `json:"iommu,omitempty"`
+	PciDeviceId   *uint8  `json:"pci_device_id,omitempty"`
 	PciSegment    *int16  `json:"pci_segment,omitempty"`
 	Size          *int64  `json:"size,omitempty"`
 }
@@ -296,32 +483,76 @@ type RateLimiterConfig struct {
 // ReceiveMigrationData defines model for ReceiveMigrationData.
 type ReceiveMigrationData struct {
 	ReceiverUrl string `json:"receiver_url"`
+
+	// TlsDir Directory containing the TLS server certificate (server-cert.pem), the TLS server key (server-key.pem), and the client TLS root CA certificate (ca-cert.pem). TLS is only supported with tcp:<host>:<port> receiver URLs.
+	TlsDir      *string                   `json:"tls_dir,omitempty"`
+	ZoneUpdates *[]VmMemoryZoneUpdateData `json:"zone_updates,omitempty"`
 }
 
 // RestoreConfig defines model for RestoreConfig.
 type RestoreConfig struct {
-	Prefault  *bool  `json:"prefault,omitempty"`
-	SourceUrl string `json:"source_url"`
+	MemoryRestoreMode *MemoryRestoreMode        `json:"memory_restore_mode,omitempty"`
+	Prefault          *bool                     `json:"prefault,omitempty"`
+	Resume            *bool                     `json:"resume,omitempty"`
+	SourceUrl         string                    `json:"source_url"`
+	ZoneUpdates       *[]VmMemoryZoneUpdateData `json:"zone_updates,omitempty"`
 }
 
 // RngConfig defines model for RngConfig.
 type RngConfig struct {
-	Iommu *bool  `json:"iommu,omitempty"`
-	Src   string `json:"src"`
+	Id          *string `json:"id,omitempty"`
+	Iommu       *bool   `json:"iommu,omitempty"`
+	PciDeviceId *uint8  `json:"pci_device_id,omitempty"`
+	PciSegment  *int16  `json:"pci_segment,omitempty"`
+	Src         string  `json:"src"`
+}
+
+// RtcConfig defines model for RtcConfig.
+type RtcConfig struct {
+	Id          *string `json:"id,omitempty"`
+	Iommu       *bool   `json:"iommu,omitempty"`
+	PciDeviceId *uint8  `json:"pci_device_id,omitempty"`
+	PciSegment  *int16  `json:"pci_segment,omitempty"`
 }
 
 // SendMigrationData defines model for SendMigrationData.
 type SendMigrationData struct {
+	// Connections The number of parallel TCP connections to use for migration. Must be between 1 and 128. Multiple connections are not supported with UNIX domain socket migration.
+	Connections    *int64 `json:"connections,omitempty"`
 	DestinationUrl string `json:"destination_url"`
-	Local          *bool  `json:"local,omitempty"`
+
+	// DowntimeMs The maximum downtime the migration aims for, in milliseconds. Defaults to 300ms.
+	DowntimeMs *int64 `json:"downtime_ms,omitempty"`
+
+	// Local Deprecated: set memory_mode to "MemFDs" instead. If true, the request is treated as if memory_mode were "MemFDs".
+	// Deprecated:
+	Local *bool `json:"local,omitempty"`
+
+	// MemoryMode Memory transfer mode. MemFDs passes the guest memory backing file descriptors to the destination over a UNIX socket. MemFDs requires every guest memory region to use shared memory or hugepage backing. Precopy transfers all guest memory before the destination resumes. Postcopy resumes the destination first and faults guest pages in on demand.
+	MemoryMode *MigrationMode `json:"memory_mode,omitempty"`
+
+	// PreserveSource Keep the source VM alive in a paused state after migration completes. This is only supported when memory_mode is "MemFDs" or the deprecated local property is true.
+	PreserveSource *bool `json:"preserve_source,omitempty"`
+
+	// TimeoutS The timeout for the migration (maximum total duration), in seconds. Defaults to 3600s (one hour).
+	TimeoutS *int64 `json:"timeout_s,omitempty"`
+
+	// TimeoutStrategy The strategy to apply when the migration timeout is reached. Cancel will abort the migration and keep the VM running on the source. Ignore will proceed with the migration regardless of the downtime requirement.
+	TimeoutStrategy *TimeoutStrategy `json:"timeout_strategy,omitempty"`
+
+	// TlsDir Directory containing the TLS root CA certificate (ca-cert.pem), the TLS client certificate (client-cert.pem), and TLS client key (client-key.pem). TLS is only supported with tcp:<host>:<port> destination URLs.
+	TlsDir *string `json:"tls_dir,omitempty"`
 }
 
-// SgxEpcConfig defines model for SgxEpcConfig.
-type SgxEpcConfig struct {
-	Id       string `json:"id"`
-	Prefault *bool  `json:"prefault,omitempty"`
-	Size     int64  `json:"size"`
+// SerialConfig defines model for SerialConfig.
+type SerialConfig struct {
+	File   *string     `json:"file,omitempty"`
+	Mode   ConsoleMode `json:"mode"`
+	Socket *string     `json:"socket,omitempty"`
 }
+
+// TimeoutStrategy The strategy to apply when the migration timeout is reached. Cancel will abort the migration and keep the VM running on the source. Ignore will proceed with the migration regardless of the downtime requirement.
+type TimeoutStrategy string
 
 // TokenBucket Defines a token bucket with a maximum capacity (_size_), an initial burst size (_one_time_burst_) and an interval for refilling purposes (_refill_time_). The refill-rate is derived from _size_ and _refill_time_, and it is the constant rate at which the tokens replenish. The refill process only starts happening after the initial burst budget is consumed. Consumption from the token bucket is unbounded in speed which allows for bursts bound in size by the amount of tokens available. Once the token bucket is empty, consumption speed is bound by the refill-rate.
 type TokenBucket struct {
@@ -340,13 +571,22 @@ type TpmConfig struct {
 	Socket string `json:"socket"`
 }
 
+// UserDeviceConfig defines model for UserDeviceConfig.
+type UserDeviceConfig struct {
+	Id          *string `json:"id,omitempty"`
+	PciDeviceId *uint8  `json:"pci_device_id,omitempty"`
+	PciSegment  *int16  `json:"pci_segment,omitempty"`
+	Socket      string  `json:"socket"`
+}
+
 // VdpaConfig defines model for VdpaConfig.
 type VdpaConfig struct {
-	Id         *string `json:"id,omitempty"`
-	Iommu      *bool   `json:"iommu,omitempty"`
-	NumQueues  int     `json:"num_queues"`
-	Path       string  `json:"path"`
-	PciSegment *int16  `json:"pci_segment,omitempty"`
+	Id          *string `json:"id,omitempty"`
+	Iommu       *bool   `json:"iommu,omitempty"`
+	NumQueues   int     `json:"num_queues"`
+	Path        string  `json:"path"`
+	PciDeviceId *uint8  `json:"pci_device_id,omitempty"`
+	PciSegment  *int16  `json:"pci_segment,omitempty"`
 }
 
 // VirtQueueAffinity defines model for VirtQueueAffinity.
@@ -357,24 +597,27 @@ type VirtQueueAffinity struct {
 
 // VmAddUserDevice defines model for VmAddUserDevice.
 type VmAddUserDevice struct {
-	Socket string `json:"socket"`
+	PciDeviceId *uint8 `json:"pci_device_id,omitempty"`
+	PciSegment  *int16 `json:"pci_segment,omitempty"`
+	Socket      string `json:"socket"`
 }
 
 // VmConfig Virtual machine configuration
 type VmConfig struct {
-	Balloon        *BalloonConfig      `json:"balloon,omitempty"`
-	Console        *ConsoleConfig      `json:"console,omitempty"`
-	Cpus           *CpusConfig         `json:"cpus,omitempty"`
-	DebugConsole   *DebugConsoleConfig `json:"debug_console,omitempty"`
-	Devices        *[]DeviceConfig     `json:"devices,omitempty"`
-	Disks          *[]DiskConfig       `json:"disks,omitempty"`
-	Fs             *[]FsConfig         `json:"fs,omitempty"`
-	Iommu          *bool               `json:"iommu,omitempty"`
-	LandlockEnable *bool               `json:"landlock_enable,omitempty"`
-	LandlockRules  *[]LandlockConfig   `json:"landlock_rules,omitempty"`
-	Memory         *MemoryConfig       `json:"memory,omitempty"`
-	Net            *[]NetConfig        `json:"net,omitempty"`
-	Numa           *[]NumaConfig       `json:"numa,omitempty"`
+	Balloon          *BalloonConfig            `json:"balloon,omitempty"`
+	Console          *ConsoleConfig            `json:"console,omitempty"`
+	Cpus             *CpusConfig               `json:"cpus,omitempty"`
+	DebugConsole     *DebugConsoleConfig       `json:"debug_console,omitempty"`
+	Devices          *[]DeviceConfig           `json:"devices,omitempty"`
+	Disks            *[]DiskConfig             `json:"disks,omitempty"`
+	Fs               *[]FsConfig               `json:"fs,omitempty"`
+	GenericVhostUser *[]GenericVhostUserConfig `json:"generic_vhost_user,omitempty"`
+	Iommu            *bool                     `json:"iommu,omitempty"`
+	LandlockEnable   *bool                     `json:"landlock_enable,omitempty"`
+	LandlockRules    *[]LandlockConfig         `json:"landlock_rules,omitempty"`
+	Memory           *MemoryConfig             `json:"memory,omitempty"`
+	Net              *[]NetConfig              `json:"net,omitempty"`
+	Numa             *[]NumaConfig             `json:"numa,omitempty"`
 
 	// Payload Payloads to boot in guest
 	Payload         PayloadConfig           `json:"payload"`
@@ -384,9 +627,10 @@ type VmConfig struct {
 	Pvpanic         *bool                   `json:"pvpanic,omitempty"`
 	RateLimitGroups *[]RateLimitGroupConfig `json:"rate_limit_groups,omitempty"`
 	Rng             *RngConfig              `json:"rng,omitempty"`
-	Serial          *ConsoleConfig          `json:"serial,omitempty"`
-	SgxEpc          *[]SgxEpcConfig         `json:"sgx_epc,omitempty"`
+	Rtc             *RtcConfig              `json:"rtc,omitempty"`
+	Serial          *SerialConfig           `json:"serial,omitempty"`
 	Tpm             *TpmConfig              `json:"tpm,omitempty"`
+	UserDevices     *[]UserDeviceConfig     `json:"user_devices,omitempty"`
 	Vdpa            *[]VdpaConfig           `json:"vdpa,omitempty"`
 	Vsock           *VsockConfig            `json:"vsock,omitempty"`
 	Watchdog        *bool                   `json:"watchdog,omitempty"`
@@ -406,11 +650,14 @@ type VmInfo struct {
 	Config           VmConfig               `json:"config"`
 	DeviceTree       *map[string]DeviceNode `json:"device_tree,omitempty"`
 	MemoryActualSize *int64                 `json:"memory_actual_size,omitempty"`
-	State            VmInfoState            `json:"state"`
+	State            VmState                `json:"state"`
 }
 
-// VmInfoState defines model for VmInfo.State.
-type VmInfoState string
+// VmMemoryZoneUpdateData defines model for VmMemoryZoneUpdateData.
+type VmMemoryZoneUpdateData struct {
+	HostNumaNode uint32 `json:"host_numa_node"`
+	Id           string `json:"id"`
+}
 
 // VmRemoveDevice defines model for VmRemoveDevice.
 type VmRemoveDevice struct {
@@ -427,6 +674,15 @@ type VmResize struct {
 	DesiredVcpus *int   `json:"desired_vcpus,omitempty"`
 }
 
+// VmResizeDisk defines model for VmResizeDisk.
+type VmResizeDisk struct {
+	// DesiredSize desired disk size in bytes
+	DesiredSize *int64 `json:"desired_size,omitempty"`
+
+	// Id disk identifier
+	Id *string `json:"id,omitempty"`
+}
+
 // VmResizeZone defines model for VmResizeZone.
 type VmResizeZone struct {
 	// DesiredRam desired memory zone size in bytes
@@ -439,6 +695,9 @@ type VmSnapshotConfig struct {
 	DestinationUrl *string `json:"destination_url,omitempty"`
 }
 
+// VmState defines model for VmState.
+type VmState string
+
 // VmmPingResponse Virtual Machine Monitor information
 type VmmPingResponse struct {
 	BuildVersion *string   `json:"build_version,omitempty"`
@@ -450,10 +709,11 @@ type VmmPingResponse struct {
 // VsockConfig defines model for VsockConfig.
 type VsockConfig struct {
 	// Cid Guest Vsock CID
-	Cid        int64   `json:"cid"`
-	Id         *string `json:"id,omitempty"`
-	Iommu      *bool   `json:"iommu,omitempty"`
-	PciSegment *int16  `json:"pci_segment,omitempty"`
+	Cid         int64   `json:"cid"`
+	Id          *string `json:"id,omitempty"`
+	Iommu       *bool   `json:"iommu,omitempty"`
+	PciDeviceId *uint8  `json:"pci_device_id,omitempty"`
+	PciSegment  *int16  `json:"pci_segment,omitempty"`
 
 	// Socket Path to UNIX domain socket, used to proxy vsock connections.
 	Socket string `json:"socket"`
@@ -467,6 +727,9 @@ type PutVmAddDiskJSONRequestBody = DiskConfig
 
 // PutVmAddFsJSONRequestBody defines body for PutVmAddFs for application/json ContentType.
 type PutVmAddFsJSONRequestBody = FsConfig
+
+// PutVmAddGenericVhostUserJSONRequestBody defines body for PutVmAddGenericVhostUser for application/json ContentType.
+type PutVmAddGenericVhostUserJSONRequestBody = GenericVhostUserConfig
 
 // PutVmAddNetJSONRequestBody defines body for PutVmAddNet for application/json ContentType.
 type PutVmAddNetJSONRequestBody = NetConfig
@@ -497,6 +760,9 @@ type PutVmRemoveDeviceJSONRequestBody = VmRemoveDevice
 
 // PutVmResizeJSONRequestBody defines body for PutVmResize for application/json ContentType.
 type PutVmResizeJSONRequestBody = VmResize
+
+// PutVmResizeDiskJSONRequestBody defines body for PutVmResizeDisk for application/json ContentType.
+type PutVmResizeDiskJSONRequestBody = VmResizeDisk
 
 // PutVmResizeZoneJSONRequestBody defines body for PutVmResizeZone for application/json ContentType.
 type PutVmResizeZoneJSONRequestBody = VmResizeZone
@@ -598,6 +864,11 @@ type ClientInterface interface {
 
 	PutVmAddFs(ctx context.Context, body PutVmAddFsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PutVmAddGenericVhostUserWithBody request with any body
+	PutVmAddGenericVhostUserWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PutVmAddGenericVhostUser(ctx context.Context, body PutVmAddGenericVhostUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PutVmAddNetWithBody request with any body
 	PutVmAddNetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -623,8 +894,14 @@ type ClientInterface interface {
 
 	PutVmAddVsock(ctx context.Context, body PutVmAddVsockJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetVmBalloonStats request
+	GetVmBalloonStats(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// BootVM request
 	BootVM(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutVmCancelMigration request
+	PutVmCancelMigration(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PutVmCoredumpWithBody request with any body
 	PutVmCoredumpWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -644,6 +921,9 @@ type ClientInterface interface {
 
 	// GetVmInfo request
 	GetVmInfo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutVmNmi request
+	PutVmNmi(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PauseVM request
 	PauseVM(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -668,6 +948,11 @@ type ClientInterface interface {
 	PutVmResizeWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	PutVmResize(ctx context.Context, body PutVmResizeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutVmResizeDiskWithBody request with any body
+	PutVmResizeDiskWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PutVmResizeDisk(ctx context.Context, body PutVmResizeDiskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PutVmResizeZoneWithBody request with any body
 	PutVmResizeZoneWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -694,9 +979,6 @@ type ClientInterface interface {
 	PutVmSnapshotWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	PutVmSnapshot(ctx context.Context, body PutVmSnapshotJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PutVmmNmi request
-	PutVmmNmi(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetVmmPing request
 	GetVmmPing(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -767,6 +1049,30 @@ func (c *Client) PutVmAddFsWithBody(ctx context.Context, contentType string, bod
 
 func (c *Client) PutVmAddFs(ctx context.Context, body PutVmAddFsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutVmAddFsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutVmAddGenericVhostUserWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutVmAddGenericVhostUserRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutVmAddGenericVhostUser(ctx context.Context, body PutVmAddGenericVhostUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutVmAddGenericVhostUserRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -897,8 +1203,32 @@ func (c *Client) PutVmAddVsock(ctx context.Context, body PutVmAddVsockJSONReques
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetVmBalloonStats(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVmBalloonStatsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) BootVM(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewBootVMRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutVmCancelMigration(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutVmCancelMigrationRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -983,6 +1313,18 @@ func (c *Client) DeleteVM(ctx context.Context, reqEditors ...RequestEditorFn) (*
 
 func (c *Client) GetVmInfo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetVmInfoRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutVmNmi(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutVmNmiRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -1091,6 +1433,30 @@ func (c *Client) PutVmResizeWithBody(ctx context.Context, contentType string, bo
 
 func (c *Client) PutVmResize(ctx context.Context, body PutVmResizeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutVmResizeRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutVmResizeDiskWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutVmResizeDiskRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PutVmResizeDisk(ctx context.Context, body PutVmResizeDiskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutVmResizeDiskRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1211,18 +1577,6 @@ func (c *Client) PutVmSnapshotWithBody(ctx context.Context, contentType string, 
 
 func (c *Client) PutVmSnapshot(ctx context.Context, body PutVmSnapshotJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutVmSnapshotRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) PutVmmNmi(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutVmmNmiRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -1358,6 +1712,46 @@ func NewPutVmAddFsRequestWithBody(server string, contentType string, body io.Rea
 	}
 
 	operationPath := fmt.Sprintf("/vm.add-fs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPutVmAddGenericVhostUserRequest calls the generic PutVmAddGenericVhostUser builder with application/json body
+func NewPutVmAddGenericVhostUserRequest(server string, body PutVmAddGenericVhostUserJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutVmAddGenericVhostUserRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPutVmAddGenericVhostUserRequestWithBody generates requests for PutVmAddGenericVhostUser with any type of body
+func NewPutVmAddGenericVhostUserRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/vm.add-generic-vhost-user")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1577,6 +1971,33 @@ func NewPutVmAddVsockRequestWithBody(server string, contentType string, body io.
 	return req, nil
 }
 
+// NewGetVmBalloonStatsRequest generates requests for GetVmBalloonStats
+func NewGetVmBalloonStatsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/vm.balloon-stats")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewBootVMRequest generates requests for BootVM
 func NewBootVMRequest(server string) (*http.Request, error) {
 	var err error
@@ -1587,6 +2008,33 @@ func NewBootVMRequest(server string) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/vm.boot")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutVmCancelMigrationRequest generates requests for PutVmCancelMigration
+func NewPutVmCancelMigrationRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/vm.cancel-migration")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1758,6 +2206,33 @@ func NewGetVmInfoRequest(server string) (*http.Request, error) {
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutVmNmiRequest generates requests for PutVmNmi
+func NewPutVmNmiRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/vm.nmi")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1947,6 +2422,46 @@ func NewPutVmResizeRequestWithBody(server string, contentType string, body io.Re
 	}
 
 	operationPath := fmt.Sprintf("/vm.resize")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPutVmResizeDiskRequest calls the generic PutVmResizeDisk builder with application/json body
+func NewPutVmResizeDiskRequest(server string, body PutVmResizeDiskJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutVmResizeDiskRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPutVmResizeDiskRequestWithBody generates requests for PutVmResizeDisk with any type of body
+func NewPutVmResizeDiskRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/vm.resize-disk")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2180,33 +2695,6 @@ func NewPutVmSnapshotRequestWithBody(server string, contentType string, body io.
 	return req, nil
 }
 
-// NewPutVmmNmiRequest generates requests for PutVmmNmi
-func NewPutVmmNmiRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/vmm.nmi")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("PUT", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewGetVmmPingRequest generates requests for GetVmmPing
 func NewGetVmmPingRequest(server string) (*http.Request, error) {
 	var err error
@@ -2319,6 +2807,11 @@ type ClientWithResponsesInterface interface {
 
 	PutVmAddFsWithResponse(ctx context.Context, body PutVmAddFsJSONRequestBody, reqEditors ...RequestEditorFn) (*PutVmAddFsResponse, error)
 
+	// PutVmAddGenericVhostUserWithBodyWithResponse request with any body
+	PutVmAddGenericVhostUserWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVmAddGenericVhostUserResponse, error)
+
+	PutVmAddGenericVhostUserWithResponse(ctx context.Context, body PutVmAddGenericVhostUserJSONRequestBody, reqEditors ...RequestEditorFn) (*PutVmAddGenericVhostUserResponse, error)
+
 	// PutVmAddNetWithBodyWithResponse request with any body
 	PutVmAddNetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVmAddNetResponse, error)
 
@@ -2344,8 +2837,14 @@ type ClientWithResponsesInterface interface {
 
 	PutVmAddVsockWithResponse(ctx context.Context, body PutVmAddVsockJSONRequestBody, reqEditors ...RequestEditorFn) (*PutVmAddVsockResponse, error)
 
+	// GetVmBalloonStatsWithResponse request
+	GetVmBalloonStatsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVmBalloonStatsResponse, error)
+
 	// BootVMWithResponse request
 	BootVMWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*BootVMResponse, error)
+
+	// PutVmCancelMigrationWithResponse request
+	PutVmCancelMigrationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutVmCancelMigrationResponse, error)
 
 	// PutVmCoredumpWithBodyWithResponse request with any body
 	PutVmCoredumpWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVmCoredumpResponse, error)
@@ -2365,6 +2864,9 @@ type ClientWithResponsesInterface interface {
 
 	// GetVmInfoWithResponse request
 	GetVmInfoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVmInfoResponse, error)
+
+	// PutVmNmiWithResponse request
+	PutVmNmiWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutVmNmiResponse, error)
 
 	// PauseVMWithResponse request
 	PauseVMWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PauseVMResponse, error)
@@ -2389,6 +2891,11 @@ type ClientWithResponsesInterface interface {
 	PutVmResizeWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVmResizeResponse, error)
 
 	PutVmResizeWithResponse(ctx context.Context, body PutVmResizeJSONRequestBody, reqEditors ...RequestEditorFn) (*PutVmResizeResponse, error)
+
+	// PutVmResizeDiskWithBodyWithResponse request with any body
+	PutVmResizeDiskWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVmResizeDiskResponse, error)
+
+	PutVmResizeDiskWithResponse(ctx context.Context, body PutVmResizeDiskJSONRequestBody, reqEditors ...RequestEditorFn) (*PutVmResizeDiskResponse, error)
 
 	// PutVmResizeZoneWithBodyWithResponse request with any body
 	PutVmResizeZoneWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVmResizeZoneResponse, error)
@@ -2415,9 +2922,6 @@ type ClientWithResponsesInterface interface {
 	PutVmSnapshotWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVmSnapshotResponse, error)
 
 	PutVmSnapshotWithResponse(ctx context.Context, body PutVmSnapshotJSONRequestBody, reqEditors ...RequestEditorFn) (*PutVmSnapshotResponse, error)
-
-	// PutVmmNmiWithResponse request
-	PutVmmNmiWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutVmmNmiResponse, error)
 
 	// GetVmmPingWithResponse request
 	GetVmmPingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVmmPingResponse, error)
@@ -2486,6 +2990,28 @@ func (r PutVmAddFsResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r PutVmAddFsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PutVmAddGenericVhostUserResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *PciDeviceInfo
+}
+
+// Status returns HTTPResponse.Status
+func (r PutVmAddGenericVhostUserResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutVmAddGenericVhostUserResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2602,6 +3128,28 @@ func (r PutVmAddVsockResponse) StatusCode() int {
 	return 0
 }
 
+type GetVmBalloonStatsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BalloonStatsResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetVmBalloonStatsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetVmBalloonStatsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type BootVMResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -2617,6 +3165,27 @@ func (r BootVMResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r BootVMResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PutVmCancelMigrationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r PutVmCancelMigrationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutVmCancelMigrationResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2724,6 +3293,27 @@ func (r GetVmInfoResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetVmInfoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PutVmNmiResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r PutVmNmiResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutVmNmiResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2856,6 +3446,27 @@ func (r PutVmResizeResponse) StatusCode() int {
 	return 0
 }
 
+type PutVmResizeDiskResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r PutVmResizeDiskResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutVmResizeDiskResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type PutVmResizeZoneResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -2982,27 +3593,6 @@ func (r PutVmSnapshotResponse) StatusCode() int {
 	return 0
 }
 
-type PutVmmNmiResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-}
-
-// Status returns HTTPResponse.Status
-func (r PutVmmNmiResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PutVmmNmiResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
 type GetVmmPingResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -3097,6 +3687,23 @@ func (c *ClientWithResponses) PutVmAddFsWithResponse(ctx context.Context, body P
 	return ParsePutVmAddFsResponse(rsp)
 }
 
+// PutVmAddGenericVhostUserWithBodyWithResponse request with arbitrary body returning *PutVmAddGenericVhostUserResponse
+func (c *ClientWithResponses) PutVmAddGenericVhostUserWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVmAddGenericVhostUserResponse, error) {
+	rsp, err := c.PutVmAddGenericVhostUserWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutVmAddGenericVhostUserResponse(rsp)
+}
+
+func (c *ClientWithResponses) PutVmAddGenericVhostUserWithResponse(ctx context.Context, body PutVmAddGenericVhostUserJSONRequestBody, reqEditors ...RequestEditorFn) (*PutVmAddGenericVhostUserResponse, error) {
+	rsp, err := c.PutVmAddGenericVhostUser(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutVmAddGenericVhostUserResponse(rsp)
+}
+
 // PutVmAddNetWithBodyWithResponse request with arbitrary body returning *PutVmAddNetResponse
 func (c *ClientWithResponses) PutVmAddNetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVmAddNetResponse, error) {
 	rsp, err := c.PutVmAddNetWithBody(ctx, contentType, body, reqEditors...)
@@ -3182,6 +3789,15 @@ func (c *ClientWithResponses) PutVmAddVsockWithResponse(ctx context.Context, bod
 	return ParsePutVmAddVsockResponse(rsp)
 }
 
+// GetVmBalloonStatsWithResponse request returning *GetVmBalloonStatsResponse
+func (c *ClientWithResponses) GetVmBalloonStatsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVmBalloonStatsResponse, error) {
+	rsp, err := c.GetVmBalloonStats(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetVmBalloonStatsResponse(rsp)
+}
+
 // BootVMWithResponse request returning *BootVMResponse
 func (c *ClientWithResponses) BootVMWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*BootVMResponse, error) {
 	rsp, err := c.BootVM(ctx, reqEditors...)
@@ -3189,6 +3805,15 @@ func (c *ClientWithResponses) BootVMWithResponse(ctx context.Context, reqEditors
 		return nil, err
 	}
 	return ParseBootVMResponse(rsp)
+}
+
+// PutVmCancelMigrationWithResponse request returning *PutVmCancelMigrationResponse
+func (c *ClientWithResponses) PutVmCancelMigrationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutVmCancelMigrationResponse, error) {
+	rsp, err := c.PutVmCancelMigration(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutVmCancelMigrationResponse(rsp)
 }
 
 // PutVmCoredumpWithBodyWithResponse request with arbitrary body returning *PutVmCoredumpResponse
@@ -3250,6 +3875,15 @@ func (c *ClientWithResponses) GetVmInfoWithResponse(ctx context.Context, reqEdit
 		return nil, err
 	}
 	return ParseGetVmInfoResponse(rsp)
+}
+
+// PutVmNmiWithResponse request returning *PutVmNmiResponse
+func (c *ClientWithResponses) PutVmNmiWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutVmNmiResponse, error) {
+	rsp, err := c.PutVmNmi(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutVmNmiResponse(rsp)
 }
 
 // PauseVMWithResponse request returning *PauseVMResponse
@@ -3328,6 +3962,23 @@ func (c *ClientWithResponses) PutVmResizeWithResponse(ctx context.Context, body 
 		return nil, err
 	}
 	return ParsePutVmResizeResponse(rsp)
+}
+
+// PutVmResizeDiskWithBodyWithResponse request with arbitrary body returning *PutVmResizeDiskResponse
+func (c *ClientWithResponses) PutVmResizeDiskWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutVmResizeDiskResponse, error) {
+	rsp, err := c.PutVmResizeDiskWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutVmResizeDiskResponse(rsp)
+}
+
+func (c *ClientWithResponses) PutVmResizeDiskWithResponse(ctx context.Context, body PutVmResizeDiskJSONRequestBody, reqEditors ...RequestEditorFn) (*PutVmResizeDiskResponse, error) {
+	rsp, err := c.PutVmResizeDisk(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutVmResizeDiskResponse(rsp)
 }
 
 // PutVmResizeZoneWithBodyWithResponse request with arbitrary body returning *PutVmResizeZoneResponse
@@ -3416,15 +4067,6 @@ func (c *ClientWithResponses) PutVmSnapshotWithResponse(ctx context.Context, bod
 	return ParsePutVmSnapshotResponse(rsp)
 }
 
-// PutVmmNmiWithResponse request returning *PutVmmNmiResponse
-func (c *ClientWithResponses) PutVmmNmiWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PutVmmNmiResponse, error) {
-	rsp, err := c.PutVmmNmi(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePutVmmNmiResponse(rsp)
-}
-
 // GetVmmPingWithResponse request returning *GetVmmPingResponse
 func (c *ClientWithResponses) GetVmmPingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVmmPingResponse, error) {
 	rsp, err := c.GetVmmPing(ctx, reqEditors...)
@@ -3504,6 +4146,32 @@ func ParsePutVmAddFsResponse(rsp *http.Response) (*PutVmAddFsResponse, error) {
 	}
 
 	response := &PutVmAddFsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PciDeviceInfo
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutVmAddGenericVhostUserResponse parses an HTTP response from a PutVmAddGenericVhostUserWithResponse call
+func ParsePutVmAddGenericVhostUserResponse(rsp *http.Response) (*PutVmAddGenericVhostUserResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutVmAddGenericVhostUserResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -3651,6 +4319,32 @@ func ParsePutVmAddVsockResponse(rsp *http.Response) (*PutVmAddVsockResponse, err
 	return response, nil
 }
 
+// ParseGetVmBalloonStatsResponse parses an HTTP response from a GetVmBalloonStatsWithResponse call
+func ParseGetVmBalloonStatsResponse(rsp *http.Response) (*GetVmBalloonStatsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetVmBalloonStatsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BalloonStatsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseBootVMResponse parses an HTTP response from a BootVMWithResponse call
 func ParseBootVMResponse(rsp *http.Response) (*BootVMResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -3660,6 +4354,22 @@ func ParseBootVMResponse(rsp *http.Response) (*BootVMResponse, error) {
 	}
 
 	response := &BootVMResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePutVmCancelMigrationResponse parses an HTTP response from a PutVmCancelMigrationWithResponse call
+func ParsePutVmCancelMigrationResponse(rsp *http.Response) (*PutVmCancelMigrationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutVmCancelMigrationResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -3767,6 +4477,22 @@ func ParseGetVmInfoResponse(rsp *http.Response) (*GetVmInfoResponse, error) {
 	return response, nil
 }
 
+// ParsePutVmNmiResponse parses an HTTP response from a PutVmNmiWithResponse call
+func ParsePutVmNmiResponse(rsp *http.Response) (*PutVmNmiResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutVmNmiResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
 // ParsePauseVMResponse parses an HTTP response from a PauseVMWithResponse call
 func ParsePauseVMResponse(rsp *http.Response) (*PauseVMResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -3856,6 +4582,22 @@ func ParsePutVmResizeResponse(rsp *http.Response) (*PutVmResizeResponse, error) 
 	}
 
 	response := &PutVmResizeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParsePutVmResizeDiskResponse parses an HTTP response from a PutVmResizeDiskWithResponse call
+func ParsePutVmResizeDiskResponse(rsp *http.Response) (*PutVmResizeDiskResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutVmResizeDiskResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -3959,22 +4701,6 @@ func ParsePutVmSnapshotResponse(rsp *http.Response) (*PutVmSnapshotResponse, err
 	return response, nil
 }
 
-// ParsePutVmmNmiResponse parses an HTTP response from a PutVmmNmiWithResponse call
-func ParsePutVmmNmiResponse(rsp *http.Response) (*PutVmmNmiResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PutVmmNmiResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	return response, nil
-}
-
 // ParseGetVmmPingResponse parses an HTTP response from a GetVmmPingWithResponse call
 func ParseGetVmmPingResponse(rsp *http.Response) (*GetVmmPingResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -4020,78 +4746,123 @@ func ParseShutdownVMMResponse(rsp *http.Response) (*ShutdownVMMResponse, error) 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+xdX2/buLL/KoTufWgB10nTPzibtzTZ7gnQZHPTbnFxDhYCLY4tbiRSS1JOvIt89wuS",
-	"+kNJpCw78W7PRR/OQWOTM8OZH2eGw6H3zyjhecEZMCWj0z8jmaSQY/PPDzjLOGfnnC3pSn9QCF6AUBTM",
-	"1wSWGVYQcxZznlef4DJT0ekSZxJmEQGZCFooyll0Gl3Y8WhhyaL7FBhSKaBVCVIhKlHJCAiUQ87FBhUC",
-	"pCwFzKNZpDYFRKfRgvMMMIseZ9FSAMQFXkEsoOBCUbbaLsGPDC+ymp/iyE5FmhbStKSfl6R/gCa+5CLH",
-	"KjqNKFPv37ZDKVOwAhE9Ps4iAb+XVACJTv9t5/3aDOOL3yBRmuA5Z5JnEFLskmaGXzVPKqFX9ziLKM/z",
-	"0rfMocw5J4YGsDLXsvy8XEaz6EZtoln0xfz/R81lFn3myR2oaBZdl1nmSNtylXbEUKDecg1L73KL8my5",
-	"pIyqzXCxKZcqTorS/EEV5NLh1Gi2oYqFwBv99zopSt/InlBm2MzhEhDwI2BVCitSV0CcPzh8GhU/+ul8",
-	"4QXP+Mqz0IQLkHEBIiYU/GsktBpR4OQOrwKjqi9DekoFYGLJaJYBHflklyFAYsd6jYn+W8AyOo3+66j1",
-	"H0eV8zhyLe6x3YJzFa9ro+eU0Vyj9PXMs56lY5gtLBsbPs6iu3Uep5sCxHrifsEPcZFuZLygKqBZPWSi",
-	"0MpBwRahG8D0kesoyeXtw+8FLMrV/k5lgWUAapO9SMB5TPUQF7CmSVB0Sp7qDQusUi+NIqGxhFUOTPU9",
-	"/Ov3kc+0DzFbx6uiJFRAouIko7+Xg+jwj+3BwYgU1sV1pfmeD0lpRgQwn69sF9XfbgH96bUvyNL7nQDJ",
-	"S5GA1yu3snY5+dzKBZV3wQTCqHCaBZ+OAVbm8e8llE3yYsd79+8z4sWwjHf2oF+pUP+jp475UUu7Tk/a",
-	"JZ38wyeJ0MlaRnOq4pXgZeE3fDPIxI/acGOi3mIFn+yMytIGQJhwlm2m2UaCoDjzCrQ2oTuYg9QDSgli",
-	"Ci8fRj/KHT3PTlDaEzFDqx6fvPUNH1GNwqvtaZuzmA7vhrKl43NVnzAjGU+CGxwnCUi/jwrsMJ+TnNV0",
-	"fCJcmcNCSICUqyIrV3EOKuWko87oLClo5El36zmTs/5mygrITrPKFZgTzB5z5MSsBsQK9JlnYpgU9ZBJ",
-	"mzbFxkyTxk5fokqLDk0lSi/JPzjrhacxJ2Vx8i/OoPVRg+g16fA2oDQ91TKeipU5jlkV3l19vDkZA9f/",
-	"CzwG/Ol/Hkx7YKEkmoURcw0q7KCkinOc+JObJ+c8tLuVotc/nMxfv//H/OTtD/PXUb88cnmzfou4QJc3",
-	"6/cIEyK00/V4yJC8OZZ3XX4n797N6/8dD/hdlVKhBSCM1jijBBn+DJSmg+gS0QJRiTCzX1QCaQGdCe9D",
-	"E5oVzL1LUKX/xBMI7ScHDe0n796PJ2xPy8UULkYyp/qM11rtPKN6SbO/JRm7LnMc2i2DMtEE99nPmQmV",
-	"CrNkh9ChJbqoZvkomnKidet2x06QytY442EM23qYc0D3ZF3I1UMMRRJLSPSW3EmSngfsKuHXgGEbNXqK",
-	"yVJRhq1nmLQY4tDaOrwnrcvNoeQT+wZvMo5JC8muD6u+lkhxtOBcIcpsfTma9cGbk4wyf2KwpCK/x2Ik",
-	"ayBYYX80WK1z/xeMKoHzpd+YdyAYZP4MfKiDhNqqxCVb8qEO9Kda/5QzhBe8VAijm/NLRMycgSJCNQdv",
-	"uPMFWk3gV7+Yn+3OCDmQPKf8zUmM9UelgPge6CpVU/dsTvn7t3tO3jVW9A9CznTv0jOsNM3gQVbnDHEV",
-	"EeN7SuzpqxGjDBStqmxju8cJBLy+x9Hhte/BJpDhkMcWETt6S1tY0H5pYUPS8HYD1rFkxbR8SpGHaQPL",
-	"MoTmoelyyMMVMplgQeJ7QdXUHDtc6H16GXXnhGffhNoswgf0JsH5SfCy2LFu8zwJlc8l+SiPit+QG3jT",
-	"C1hSBjaN/RlpwqgijO6pShFlBApgBJhCi40CeaTHEsQL/S8zVM6RYSIRFoCIIUjQYoOsZKXWBwKcpIgv",
-	"zQ1svMCMGK8QG1oxL2SMFL8DhhalzvZMGt3z4/WcbTr8oul8MGTMZi7kTjN8m+YWEqBruKIrYeLORRUe",
-	"uxIKO0rEpci2x5bOaK/xQCougsd+91jqOVqaevo0SZyxXjnYatTPTzzrimSCJCLxivAZGNmifCfHCqx6",
-	"FmU86ZR93ZNBIF8LauXz6uHHItnRI+xYSjhIecAFe9gbdHaj9QQY5fiB5mWOElzghKoNemEOl/HLmXYf",
-	"OgOkOEOLUkiF9BfoRcwZxIrmEJtP45dmv5vBCsQaZ2jJBRKwpFmmvURRioJLkOhFbD+0k1/O0ZcUqnGv",
-	"jJOiEhEQdA0ELQXPkZXEuhN36sx8RE3Dh/Y9CWc6/VbW1WGF7lOapOYrs2SJBBQZMCpTlykqBE9MPYBl",
-	"GyQVFkqiFBcFMC03XmqHqYl0tbAoyQoMb823zIHM0bn5l9G4Fb3hXavb9KYseMkIEJ3hywKAVILiLOP3",
-	"0qjNsJDIDDTDtMoXG0MP57xkyjhcuyq8xjTDiwzm6GeWgJcp5IXazCpRrYCWNa25VNQdQwwdddfkQ4x9",
-	"cbRkRObLHt40zQHomyvwY2/xojW5n2OrkFxjTULCGZEaGArfgVWoXlqlDdOuo0nuIUtbcOkLobjCGbLp",
-	"oWMblWoFW8YJZijlGdmZr6+g3NWL1xsUwWxwaiNONc5H/Ssp8OGu2f+WK1b/lZEjilcPg+vVZ2tMsjU+",
-	"naU9TOhPckdva1P6mp8R8osEYQ/jhwFIHspLtcpKnKEcJyll0OSSdRWlnxyaJr9tiV63xfBxFiW2i2Vr",
-	"40yn2UXPqwy1pdtGtjMILMpVPJGfp8PGkNB2mF5J7LS5+GuTdztQa1srPLSW0wl9lGEyO+z+rLoNjoFN",
-	"v8tpJoky20GTvZtnj+C2wjrtWrClwuz2mVYXbq51/IUOvFOFOUyqsCXGbUS6hcqxSvEolX4NzSdQVWza",
-	"SqtblNIzc8ini9IWRnxCrAvMaDINZf3Wl+n68NYbPOIItr2U0BzbOh0vO7m5qmI/WfzOocgjtiq2WrFN",
-	"SB5n0ZoU02HtJBu+Bl4dhbaSkJ1Nfo9VkhK+mni51M0L7C4KBT0BpMyLfY+yjwGqpT5V2V4YQqgmgLOb",
-	"bo9M4PMpnRKBdjxXBH/Fvo7lV1Usp20Ff3hvMalO9jXvh8VYCYCxFW6PlKYJ0reu6voMJ3oVu/QrSIVV",
-	"p6P1XABWoM/ntyXTJ8doFn1OS0X4vVbFDS4lkO2drZWSagZ+kN1CztcQSt4mF4w1oXrJA5xqgWIn+era",
-	"vRrQPMEwpz3KbB3Rd77xXLtVPATOw/SrJxwC53tSn9RnPaacf3E2oqApwv/BGeyjoB3s+JnhQqZchV/Y",
-	"7Od38hvKVrcgC84kbN/9V5xRxcWoF1iUNCPxGoSsbmiHd5hOo/4O19nDK/OAXsO8+08+qoHeTShH2hUT",
-	"SobK+sk8FjLz0PnlxWgR4M1kPBz62oX7q4k3WKVIcfTL9eX/IsJzTBmyY2dIOzr9XSH4wwaZ6KzPeKzq",
-	"DfC00fR9oC1zhs6Wj+ZO2heNPvEEZ+ifX77coAXWUpzdXJryT44ZXplqnqmnyULLov9EScZL8so+8KCS",
-	"C7Tunk61tBlNoMI/w7kW5azASQroxPQimQ0VpUoVp0dH9/f3c2y+nXOxOqqmyqNPl+c/Xn/+8dXJ/Hie",
-	"qjwzEKZKn26icy0D+mcrw9nNZeTgNDqev5kf2xsPYLig0Wn0Zn5sGq8KrFKDuaN1PseEvCJtVCiN4TQw",
-	"zVa8JNpwpTKn/4v6Sl0rHqT6wMmmCtKqggcuiowmZurRb9JuGBtWdzuePj7OPAUzLXh9a8Tgvr3jb5Gg",
-	"RAn2CYHxP2aZJ8fHzyZmtxshIGcrG7rHEsnStBAvyyzbIEyIhbpexNcrjSzT/zHXtjo5fusvFY5RfJHw",
-	"jLwcJ/x2AuGElxlBjNu2uDA1vcXLPMf6gBudEYKwS6WZYgY2CKO2O28cX3rQgdDllCv8NiOgMM1kB16t",
-	"PN8auKi8e1ZoeelNAdY7u/wRsk+FlabhB5WtMo1C6qM8EKDastVkOOkoQbmW+rvDeiKunsVhNfYYd11V",
-	"VW4UZtfmpcohcObU+SYDjYG65+Lue3j8ltDWNUoAa3WJchRsN3rQYdDmVj0nw00L/R1r3xLWHIsEgFZK",
-	"EFPTfufS7zCo63P5nv3/52X/GlCywAmM464u4Y8C7qsedCCoObcC0xO3i5uzbxptjoDPCblRsk92dS71",
-	"p2ZyDqkA7ur7nnHgmVEHQp57mTQdeqYS9t3TfUvHBsckHrQtOA+fFz5wrr5eRQO7BbThyNNVhWYCZNy3",
-	"u5OdJXOz7gSXEqo+SP1xYm+i0KbqeW4XrkU2aywErCkvZbZpRg/0pRWQVLeZ47utvvM8WErRuVQN4LcW",
-	"ddBOtG2fTVD5AL41sz3tBg6BsAEr0u+ek3QDtg4uvpg+Saxp1rNdDLR3zyvwYOAnUM4N9QH9mMMlAAKz",
-	"gGaIu8SfQDVftb25zl63Sg8C3V7vVvv9MBgfCydmYX8BrhvkdZRnF2+brPv3Jf07wBdfr162ngTZluCK",
-	"XweEM9tw3WGpDUEggxFDXJiv93S8gwVbZoMFWyb7LLhZRn1DFd4yJhofdLuMxXujlvaatrv+W1ClYBKt",
-	"gIHAmTuyepj5FNUU2imFQ4r+9jkCq2Gzl4M2M7dF1p19c4iq3ycbNSDshmo70B+pC34P4tWiVMpCxK9a",
-	"PeiDGTNRwWYGsmS72lWCrlYg7DOG2peOaLqi0QlVLY39db0r3UAEtDO0vt0VO0ur9CxgNCm8NV8/B3ot",
-	"o/3wa+c+b2YRpOlXqFWEPxO3ejRv5F7l9duv8RSz/0zvQGHY+xow4EB/uf3UPC3Rq7GvaswrlGo2sj1c",
-	"TwnVLa1B6Ko0SMbPSh0anU3izO9Zznxu08F2rsmZfrn95Fgw52uYVHjs9KsdKoHqMAnYjBJgii5p9UYn",
-	"henH8YCNQgdcqx3ippoT63i+k+0Waj376bEI14R8ya5o+/5GjNY8NDqMuQz5gKEUFiuonhrWm6xJvp87",
-	"67Xa2PcoV83e5m1PfngiXYySorRI0BmZRFKZ14vACGWrIQqM7rx2f/VH3dO4xfim9/GwADAsdgCB01O5",
-	"PxrcxsxRNATdqkvBZ7WAOXBHfscqqvqB5VGLmEGHCnzui/SAPSo5/5KTaMXrCZvSTO/tSpwJwCR4zq20",
-	"YEOf8ZsYyaq11k1dZJnDSAqov/57DzBWxGCytucBJki1EbSvTT28c4SxI/0poQRGpuaDnZ8NONCeGP40",
-	"wZZMUFpXbP3UX5MESmBq3wSwmtuxmV5zP/NTvJP3yfpRQ8hA9auH59gCmhnSxPbZBc3kFrJPPgZ5aDbb",
-	"wPx2wHAfaH30k7Z6TbVOKyezBfT1qEOF5N4zggDca2H/kjhQM1N7hwKHwrPX2sdph07GtrZmdtkguuRz",
-	"ltNxGOTXOZ28s66vLrsKpew3SDxiXZrPEWZ6iiNOUf0HUcJ1TPNI5LCFzO47lGBFc6ykeVN7Zj1McZSk",
-	"kNwZt312c4kkiDWI+qc0aGZ+J71WwQ4ebxeXdzV0da1X6LoPGai3Xl3NrTas/DI6/fef3fcI5odxUi7V",
-	"ES7o0fp19Pjr4/8FAAD//y1X+7mqZwAA",
+	"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",
+	"rKsAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

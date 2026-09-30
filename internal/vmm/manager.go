@@ -5,7 +5,6 @@ package vmm
 
 import (
 	"context"
-	b64 "encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -259,7 +258,7 @@ func (m *Manager) Status(ctx context.Context, machineID string) (*VMStatus, erro
 	return status, nil
 }
 
-func mapVMState(state client.VmInfoState) VMState {
+func mapVMState(state client.VmState) VMState {
 	switch state {
 	case client.Running:
 		return VMStateRunning
@@ -297,6 +296,25 @@ func (m *Manager) getVM(ctx context.Context, machineID string) (*client.VmInfo, 
 	return resp.JSON200, nil
 }
 
+const ignitionConfigFwCfgName = "opt/com.coreos/config"
+
+func ignitionFwCfgConfig(ignitionFilePath string) *client.FwCfgConfig {
+	// The standard payload items (e820/kernel/cmdline/initramfs/acpi_tables)
+	// are left unset: cloud-hypervisor's FwCfgConfig uses serde(default), so an
+	// omitted field deserializes to false. We only deliver the ignition config
+	// item; the firmware provides the kernel/ACPI/e820 on this firmware boot.
+	return &client.FwCfgConfig{
+		Items: &client.FwCfgItemList{
+			ItemList: &[]client.FwCfgItem{
+				{
+					Name: ignitionConfigFwCfgName,
+					File: new(ignitionFilePath),
+				},
+			},
+		},
+	}
+}
+
 func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 	m.idMu.Lock(machine.ID)
 	defer m.idMu.Unlock(machine.ID)
@@ -326,9 +344,11 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 	}
 
 	if machine.Spec.Ignition != nil {
-		platform.OemStrings = new([]string{
-			b64.StdEncoding.EncodeToString(machine.Spec.Ignition),
-		})
+		ignitionPath := m.paths.MachineIgnitionFile(machine.ID)
+		if err := os.WriteFile(ignitionPath, machine.Spec.Ignition, 0644); err != nil {
+			return fmt.Errorf("failed to write ignition file: %w", err)
+		}
+		payload.FwCfgConfig = ignitionFwCfgConfig(ignitionPath)
 	}
 
 	var disks []client.DiskConfig
@@ -361,7 +381,7 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 
 		dev = append(dev, client.DeviceConfig{
 			Id:   new(getNicID(nic.Name)),
-			Path: nic.Path,
+			Path: new(nic.Path),
 		})
 	}
 
@@ -380,8 +400,8 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 		Console: &client.ConsoleConfig{
 			Mode: "Off",
 		},
-		Serial: &client.ConsoleConfig{
-			Mode:   client.ConsoleConfigModeSocket,
+		Serial: &client.SerialConfig{
+			Mode:   client.ConsoleModeSocket,
 			Socket: new(m.paths.MachineChSerialSocket(machine.ID)),
 		},
 		Payload:  payload,
@@ -446,7 +466,7 @@ func (m *Manager) AttachNetworkInterface(ctx context.Context, instanceID string,
 
 	resp, err := apiClient.PutVmAddDeviceWithResponse(ctx, client.DeviceConfig{
 		Id:   new(getNicID(nic.Name)),
-		Path: nic.Path,
+		Path: new(nic.Path),
 	})
 	if err != nil {
 		return wrapIfSocketClosed(fmt.Errorf("failed to remove device: %w", err))

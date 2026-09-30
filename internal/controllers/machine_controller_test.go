@@ -80,7 +80,7 @@ var _ = Describe("MachineController", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.StatusCode()).To(Equal(http.StatusOK))
 
-			Eventually(func(g Gomega) client.VmInfoState {
+			Eventually(func(g Gomega) client.VmState {
 				resp, err := chClient.GetVmInfoWithResponse(ctx)
 				g.Expect(err).NotTo(HaveOccurred())
 
