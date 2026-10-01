@@ -8,7 +8,7 @@ on:
 
 env:
   CH_REPO: cloud-hypervisor/cloud-hypervisor
-  CH_REF: main
+  CH_REF: 71cd7989efc0f168fa9ed0d35094719760c56b44
   EDK2_FW_REPO: ironcore-dev/cloud-hypervisor-provider
   EDK2_FW_TAG: ch-fw-edk2-stable202508
 
@@ -39,6 +39,12 @@ jobs:
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cloud-hypervisor build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cloud-hypervisor-src
+          key: ${{ env.CH_REF }}
 
       - name: Build cloud-hypervisor (--features fw_cfg)
         working-directory: cloud-hypervisor-src

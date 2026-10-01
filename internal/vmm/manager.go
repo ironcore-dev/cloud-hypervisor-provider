@@ -130,9 +130,6 @@ func (m *Manager) launch(ctx context.Context, machineID string) (*client.ClientW
 	if err := os.Remove(sockPath); err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("failed to remove stale socket: %w", err)
 	}
-	if err := os.Remove(m.paths.MachineChSerialSocket(machineID)); err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to remove stale serial socket: %w", err)
-	}
 
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
@@ -212,9 +209,6 @@ func (m *Manager) stopVMM(_ context.Context, machineID string) error {
 
 	if err := os.Remove(m.paths.MachineChSocket(machineID)); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove socket: %w", err)
-	}
-	if err := os.Remove(m.paths.MachineChSerialSocket(machineID)); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove serial socket: %w", err)
 	}
 	if err := m.removePid(machineID); err != nil {
 		return fmt.Errorf("failed to remove pidfile: %w", err)
@@ -299,11 +293,12 @@ func (m *Manager) getVM(ctx context.Context, machineID string) (*client.VmInfo, 
 const ignitionConfigFwCfgName = "opt/com.coreos/config"
 
 func ignitionFwCfgConfig(ignitionFilePath string) *client.FwCfgConfig {
-	// The standard payload items (e820/kernel/cmdline/initramfs/acpi_tables)
-	// are left unset: cloud-hypervisor's FwCfgConfig uses serde(default), so an
-	// omitted field deserializes to false. We only deliver the ignition config
-	// item; the firmware provides the kernel/ACPI/e820 on this firmware boot.
 	return &client.FwCfgConfig{
+		E820:       new(false),
+		Kernel:     new(false),
+		Cmdline:    new(false),
+		Initramfs:  new(false),
+		AcpiTables: new(false),
 		Items: &client.FwCfgItemList{
 			ItemList: &[]client.FwCfgItem{
 				{
@@ -345,7 +340,7 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 
 	if machine.Spec.Ignition != nil {
 		ignitionPath := m.paths.MachineIgnitionFile(machine.ID)
-		if err := os.WriteFile(ignitionPath, machine.Spec.Ignition, 0644); err != nil {
+		if err := os.WriteFile(ignitionPath, machine.Spec.Ignition, 0600); err != nil {
 			return fmt.Errorf("failed to write ignition file: %w", err)
 		}
 		payload.FwCfgConfig = ignitionFwCfgConfig(ignitionPath)
@@ -368,6 +363,7 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 			disk.Readonly = new(false)
 		case api.VolumeFileType:
 			disk.Path = new(vol.Path)
+			disk.ImageType = new(client.Raw)
 		}
 
 		disks = append(disks, disk)
@@ -401,8 +397,8 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 			Mode: "Off",
 		},
 		Serial: &client.SerialConfig{
-			Mode:   client.ConsoleModeSocket,
-			Socket: new(m.paths.MachineChSerialSocket(machine.ID)),
+			Mode: client.ConsoleModeFile,
+			File: new(m.paths.MachineChSerialLog(machine.ID)),
 		},
 		Payload:  payload,
 		Platform: platform,
@@ -513,6 +509,8 @@ func (m *Manager) AttachDisk(ctx context.Context, instanceID string, volume *api
 		disk.Readonly = new(false)
 	case api.VolumeFileType:
 		disk.Path = new(volume.Path)
+		// See Create: file-backed disks must declare their image type.
+		disk.ImageType = new(client.Raw)
 	}
 
 	resp, err := apiClient.PutVmAddDiskWithResponse(ctx, disk)
