@@ -6,7 +6,16 @@ on:
     paths-ignore:
       - 'docs/**'
 
+env:
+  CH_REPO: cloud-hypervisor/cloud-hypervisor
+  CH_REF: main
+  EDK2_FW_REPO: ironcore-dev/cloud-hypervisor-provider
+  EDK2_FW_TAG: ch-fw-edk2-stable202508
+
 jobs:
+  # NOTE: this job only runs on x86_64 (ubuntu-24.04). cloud-hypervisor is built
+  # natively for amd64; ARM is NOT exercised here, which is why the arm-acpi fork
+  # used by .github/workflows/cloud-hypervisor.yml is not needed for this job.
   integration-tests:
     runs-on: ubuntu-24.04
 
@@ -20,6 +29,32 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
+
+      - name: Checkout cloud-hypervisor (upstream)
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.CH_REPO }}
+          ref: ${{ env.CH_REF }}
+          path: cloud-hypervisor-src
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build cloud-hypervisor (--features fw_cfg)
+        working-directory: cloud-hypervisor-src
+        run: |
+          set -x
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config
+
+          # cloud-hypervisor's default features (io_uring, kvm) plus fw_cfg.
+          cargo build --release --bin cloud-hypervisor --features fw_cfg
+
+          sudo cp target/release/cloud-hypervisor /usr/local/bin/cloud-hypervisor
+          sudo chmod a+x /usr/local/bin/cloud-hypervisor
+          /usr/local/bin/cloud-hypervisor --version
+          # cloud-hypervisor built with --features fw_cfg exposes --fw-cfg-config.
+          /usr/local/bin/cloud-hypervisor --help | grep -q fw-cfg-config
 
       - name: Install dependencies
         run: |
@@ -36,43 +71,19 @@ jobs:
           sudo update-ca-certificates
           sudo rm -rf /var/lib/apt/lists
 
-          sudo curl -L "https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/v51.1/cloud-hypervisor-static" -o "/usr/local/bin/cloud-hypervisor"
-          sudo curl -L "https://github.com/cloud-hypervisor/rust-hypervisor-firmware/releases/download/0.5.0/hypervisor-fw" -o "/usr/local/bin/hypervisor-fw"
+          sudo curl -fL "https://github.com/${EDK2_FW_REPO}/releases/download/${EDK2_FW_TAG}/CLOUDHV.fd" \
+            -o /usr/local/bin/CLOUDHV.fd
+          sudo chmod 0644 /usr/local/bin/CLOUDHV.fd
+          echo "CH_FIRMWARE_PATH=/usr/local/bin/CLOUDHV.fd" >> $GITHUB_ENV
 
-          sudo chmod a+x /usr/local/bin/cloud-hypervisor
-
-          # Create chp group and user
-          if ! getent group chp > /dev/null 2>&1; then
-            sudo groupadd -g 65532 chp
-          fi
-          if ! getent passwd chp > /dev/null 2>&1; then
-            sudo useradd -u 65532 -g chp -s /sbin/nologin -M -d /nonexistent chp
-          fi
-
-          sudo usermod -aG kvm chp
-
-          # Create storage directory
-          sudo mkdir -p /var/lib/chp
-          sudo mkdir -p /run/chp/ch
-          sudo chown chp:chp /var/lib/chp
-          sudo chmod 0755 /var/lib/chp
-          sudo chown chp:chp /run/chp/ch
-          sudo chmod 0755 /run/chp/ch
-          echo "CH_SOCKET_DIR=/run/chp/ch/" >> $GITHUB_ENV
-
-          sudo -u chp /usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/01.sock -v &
-          sudo -u chp /usr/local/bin/cloud-hypervisor --api-socket /run/chp/ch/02.sock -v &
-
-          sleep 2
-
-          # Make sockets accessible to runner
-          sudo chmod o+rw /run/chp/ch/*.sock
-
-          sudo ls -la /run/chp/ch
-
+          # The provider spins up cloud-hypervisor on demand (one process per
+          # machine, under a per-test temp dir) rather than adopting pre-launched
+          # instances. The test process does the spawning, so it just needs KVM
+          # access; make /dev/kvm usable by the unprivileged runner user.
+          sudo chmod 0666 /dev/kvm
 
       - name: Run integration tests
         run: |
           sudo kvm-ok
-          sudo /usr/local/bin/cloud-hypervisor --version
+          /usr/local/bin/cloud-hypervisor --version
           make integration-tests
