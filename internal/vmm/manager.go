@@ -308,7 +308,7 @@ func ignitionFwCfgConfig(ignitionFilePath string) *client.FwCfgConfig {
 			ItemList: &[]client.FwCfgItem{
 				{
 					Name: ignitionConfigFwCfgName,
-					File: new(ignitionFilePath),
+					File: &ignitionFilePath,
 				},
 			},
 		},
