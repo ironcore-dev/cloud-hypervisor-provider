@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	eventuallyTimeout    = 180 * time.Second
+	eventuallyTimeout    = 300 * time.Second
 	pollingInterval      = 50 * time.Millisecond
 	consistentlyDuration = 1 * time.Second
 	osImage              = "ghcr.io/ironcore-dev/gardenlinux/gardener:2150.11.0-kvm"

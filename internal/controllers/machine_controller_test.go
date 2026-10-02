@@ -83,6 +83,21 @@ var _ = Describe("MachineController", func() {
 				return false
 			}).Should(BeTrue())
 
+			By("verifying image pulled event was recorded")
+			Eventually(func(g Gomega) bool {
+				events := eventRecorder.ListEvents()
+				GinkgoWriter.Printf("Total events recorded: %d\n", len(events))
+
+				for _, evt := range events {
+					if evt.InvolvedObjectMeta.ID == machineID && evt.Reason == "ImagePullSucceeded" {
+						GinkgoWriter.Printf("Found ImagePullSucceeded event for machine %s: %s\n", machineID, evt.Message)
+						return true
+					}
+				}
+
+				return false
+			}).Should(BeTrue())
+
 			By("waiting for the cloud-hypervisor api socket to become ready")
 			sockPath := hostPaths.MachineChSocket(machineID)
 			Eventually(func(g Gomega) error {
