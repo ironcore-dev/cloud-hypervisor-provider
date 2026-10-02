@@ -5,7 +5,6 @@ package vmm
 
 import (
 	"context"
-	b64 "encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -152,9 +151,6 @@ func (m *Manager) launch(ctx context.Context, machineID string) (*client.ClientW
 	if err := os.Remove(sockPath); err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("failed to remove stale socket: %w", err)
 	}
-	if err := os.Remove(m.paths.MachineChSerialSocket(machineID)); err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to remove stale serial socket: %w", err)
-	}
 
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
@@ -235,9 +231,6 @@ func (m *Manager) stopVMM(_ context.Context, machineID string) error {
 	if err := os.Remove(m.paths.MachineChSocket(machineID)); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove socket: %w", err)
 	}
-	if err := os.Remove(m.paths.MachineChSerialSocket(machineID)); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove serial socket: %w", err)
-	}
 	if err := m.removePid(machineID); err != nil {
 		return fmt.Errorf("failed to remove pidfile: %w", err)
 	}
@@ -280,7 +273,7 @@ func (m *Manager) Status(ctx context.Context, machineID string) (*VMStatus, erro
 	return status, nil
 }
 
-func mapVMState(state client.VmInfoState) VMState {
+func mapVMState(state client.VmState) VMState {
 	switch state {
 	case client.Running:
 		return VMStateRunning
@@ -318,6 +311,26 @@ func (m *Manager) getVM(ctx context.Context, machineID string) (*client.VmInfo, 
 	return resp.JSON200, nil
 }
 
+const ignitionConfigFwCfgName = "opt/com.coreos/config"
+
+func ignitionFwCfgConfig(ignitionFilePath string) *client.FwCfgConfig {
+	return &client.FwCfgConfig{
+		E820:       new(false),
+		Kernel:     new(false),
+		Cmdline:    new(false),
+		Initramfs:  new(false),
+		AcpiTables: new(false),
+		Items: &client.FwCfgItemList{
+			ItemList: &[]client.FwCfgItem{
+				{
+					Name: ignitionConfigFwCfgName,
+					File: &ignitionFilePath,
+				},
+			},
+		},
+	}
+}
+
 func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 	m.idMu.Lock(machine.ID)
 	defer m.idMu.Unlock(machine.ID)
@@ -347,9 +360,15 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 	}
 
 	if machine.Spec.Ignition != nil {
-		platform.OemStrings = new([]string{
-			b64.StdEncoding.EncodeToString(machine.Spec.Ignition),
-		})
+		ignitionPath := m.paths.MachineIgnitionFile(machine.ID)
+		if err := os.WriteFile(ignitionPath, machine.Spec.Ignition, 0600); err != nil {
+			return fmt.Errorf("failed to write ignition file: %w", err)
+		}
+
+		if err := os.Chmod(ignitionPath, 0600); err != nil {
+			return fmt.Errorf("failed to set ignition file permissions: %w", err)
+		}
+		payload.FwCfgConfig = ignitionFwCfgConfig(ignitionPath)
 	}
 
 	var disks []client.DiskConfig
@@ -369,6 +388,7 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 			disk.Readonly = new(false)
 		case api.VolumeFileType:
 			disk.Path = new(vol.Path)
+			disk.ImageType = new(client.Raw)
 		}
 
 		disks = append(disks, disk)
@@ -382,7 +402,7 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 
 		dev = append(dev, client.DeviceConfig{
 			Id:   new(getNicID(nic.Name)),
-			Path: nic.Path,
+			Path: new(nic.Path),
 		})
 	}
 
@@ -401,9 +421,9 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 		Console: &client.ConsoleConfig{
 			Mode: "Off",
 		},
-		Serial: &client.ConsoleConfig{
-			Mode:   client.ConsoleConfigModeSocket,
-			Socket: new(m.paths.MachineChSerialSocket(machine.ID)),
+		Serial: &client.SerialConfig{
+			Mode: client.ConsoleModeFile,
+			File: new(m.paths.MachineChSerialLog(machine.ID)),
 		},
 		Payload:  payload,
 		Platform: platform,
@@ -467,7 +487,7 @@ func (m *Manager) AttachNetworkInterface(ctx context.Context, instanceID string,
 
 	resp, err := apiClient.PutVmAddDeviceWithResponse(ctx, client.DeviceConfig{
 		Id:   new(getNicID(nic.Name)),
-		Path: nic.Path,
+		Path: new(nic.Path),
 	})
 	if err != nil {
 		return wrapIfSocketClosed(fmt.Errorf("failed to add device: %w", err))
@@ -514,6 +534,8 @@ func (m *Manager) AttachDisk(ctx context.Context, instanceID string, volume *api
 		disk.Readonly = new(false)
 	case api.VolumeFileType:
 		disk.Path = new(volume.Path)
+		// See Create: file-backed disks must declare their image type.
+		disk.ImageType = new(client.Raw)
 	}
 
 	resp, err := apiClient.PutVmAddDiskWithResponse(ctx, disk)

@@ -5,6 +5,7 @@ package controllers_test
 
 import (
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +23,24 @@ var _ = Describe("MachineController", func() {
 		machineID := uuid.NewString()
 
 		It("should create and reconcile a machine", func(ctx SpecContext) {
+			// Ignition is delivered to the guest via the fw_cfg device. This config
+			// enables a oneshot unit that writes a marker straight to the serial
+			// port (/dev/ttyS0); the test reads it back off the serial socket —
+			// end-to-end proof that the guest consumed the fw_cfg-delivered Ignition.
+			const serialMarker = "ignition-fw-cfg-ok-7a3f"
+			ignitionData := []byte(`{
+  "ignition": {"version": "3.3.0"},
+  "systemd": {
+    "units": [
+      {
+        "name": "ignition-marker.service",
+        "enabled": true,
+        "contents": "[Unit]\nDescription=Emit ignition marker on the serial console\nAfter=basic.target\n[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/bin/sh -c 'echo ignition-fw-cfg-ok-7a3f > /dev/ttyS0'\n[Install]\nWantedBy=multi-user.target\n"
+      }
+    ]
+  }
+}`)
+
 			By("creating a machine in the store")
 			machine, err := machineStore.Create(ctx, &api.Machine{
 				Metadata: apiutils.Metadata{
@@ -31,6 +50,7 @@ var _ = Describe("MachineController", func() {
 					Power:       api.PowerStatePowerOn,
 					Cpu:         2,
 					MemoryBytes: 2147483648,
+					Ignition:    ignitionData,
 					Volumes: []*api.VolumeSpec{
 						{
 							Name:   "root",
@@ -80,7 +100,7 @@ var _ = Describe("MachineController", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.StatusCode()).To(Equal(http.StatusOK))
 
-			Eventually(func(g Gomega) client.VmInfoState {
+			Eventually(func(g Gomega) client.VmState {
 				resp, err := chClient.GetVmInfoWithResponse(ctx)
 				g.Expect(err).NotTo(HaveOccurred())
 
@@ -89,6 +109,20 @@ var _ = Describe("MachineController", func() {
 
 				return resp.JSON200.State
 			}).Should(Equal(client.Running))
+
+			By("verifying the ignition file was written with owner-only permissions")
+			info, err := os.Stat(hostPaths.MachineIgnitionFile(machineID))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(info.Mode().Perm()).To(Equal(os.FileMode(0600)))
+
+			By("reading the ignition marker from the serial log")
+			Eventually(func() (string, error) {
+				data, err := os.ReadFile(hostPaths.MachineChSerialLog(machineID))
+				if os.IsNotExist(err) {
+					return "", nil
+				}
+				return string(data), err
+			}, 5*time.Minute, time.Second).Should(ContainSubstring(serialMarker))
 
 			Expect(machineStore.Delete(ctx, machineID)).Should(Succeed())
 

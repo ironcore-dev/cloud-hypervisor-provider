@@ -22,10 +22,10 @@ const (
 	DefaultMachinePluginsDir           = "plugins"
 	DefaultMachineNetworkInterfacesDir = "networkinterfaces"
 
-	DefaultMachineChSocketFile = "api.sock"
-	DefaultMachineChPidFile    = "ch.pid"
-	DefaultMachineChLogFile    = "ch.log"
-	DefaultMachineChSerialFile = "serial.sock"
+	DefaultMachineChSocketFile    = "api.sock"
+	DefaultMachineChPidFile       = "ch.pid"
+	DefaultMachineChLogFile       = "ch.log"
+	DefaultMachineChSerialLogFile = "serial.log"
 )
 
 type Paths interface {
@@ -47,7 +47,7 @@ type Paths interface {
 	MachineChSocket(machineUID string) string
 	MachineChPidFile(machineUID string) string
 	MachineChLog(machineUID string) string
-	MachineChSerialSocket(machineUID string) string
+	MachineChSerialLog(machineUID string) string
 
 	MachineVolumesPluginDir(machineUID string, pluginName string) string
 	MachineVolumeDir(machineUID string, pluginName, volumeName string) string
@@ -99,8 +99,8 @@ func (p *paths) MachineChLog(machineUID string) string {
 	return filepath.Join(p.MachineDir(machineUID), DefaultMachineChLogFile)
 }
 
-func (p *paths) MachineChSerialSocket(machineUID string) string {
-	return filepath.Join(p.MachineDir(machineUID), DefaultMachineChSerialFile)
+func (p *paths) MachineChSerialLog(machineUID string) string {
+	return filepath.Join(p.MachineDir(machineUID), DefaultMachineChSerialLogFile)
 }
 
 func (p *paths) MachineRootFSDir(machineUID string) string {
