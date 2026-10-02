@@ -12,6 +12,9 @@ env:
   EDK2_FW_REPO: ironcore-dev/cloud-hypervisor-provider
   EDK2_FW_TAG: ch-fw-edk2-stable202508
 
+permissions:
+  contents: read
+
 jobs:
   # NOTE: this job only runs on x86_64 (ubuntu-24.04). cloud-hypervisor is built
   # natively for amd64; ARM is NOT exercised here, which is why the arm-acpi fork
@@ -24,6 +27,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup go
         uses: actions/setup-go@v7
@@ -36,6 +41,7 @@ jobs:
           repository: ${{ env.CH_REPO }}
           ref: ${{ env.CH_REF }}
           path: cloud-hypervisor-src
+          persist-credentials: false
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable

@@ -33,6 +33,7 @@ jobs:
           repository: ${{ env.CH_REPO }}
           ref: ${{ env.CH_REF }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Install build dependencies
         run: |
           sudo apt-get update

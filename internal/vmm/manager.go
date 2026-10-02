@@ -343,6 +343,10 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 		if err := os.WriteFile(ignitionPath, machine.Spec.Ignition, 0600); err != nil {
 			return fmt.Errorf("failed to write ignition file: %w", err)
 		}
+
+		if err := os.Chmod(ignitionPath, 0600); err != nil {
+			return fmt.Errorf("failed to set ignition file permissions: %w", err)
+		}
 		payload.FwCfgConfig = ignitionFwCfgConfig(ignitionPath)
 	}
 
