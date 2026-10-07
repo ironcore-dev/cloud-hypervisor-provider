@@ -13,10 +13,10 @@ require (
 	github.com/ironcore-dev/controller-utils v0.14.0
 	github.com/ironcore-dev/ironcore v0.6.1
 	github.com/ironcore-dev/ironcore-image v0.5.0
-	github.com/ironcore-dev/ironcore-net v0.5.2
+	github.com/ironcore-dev/ironcore-net v0.6.0
 	github.com/ironcore-dev/provider-utils v0.0.0-20260420150206-639a4bf5422f
 	github.com/onsi/ginkgo/v2 v2.33.0
-	github.com/onsi/gomega v1.43.1
+	github.com/onsi/gomega v1.44.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	golang.org/x/sync v0.23.0
