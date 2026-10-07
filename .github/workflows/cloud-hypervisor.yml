@@ -28,7 +28,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout cloud-hypervisor
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ env.CH_REPO }}
           ref: ${{ env.CH_REF }}
@@ -58,7 +58,7 @@ jobs:
           BIN_DIR="target/${{ matrix.target }}/release"
           mkdir -p out
           cp "$BIN_DIR/cloud-hypervisor" "out/cloud-hypervisor-static${{ matrix.suffix }}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ch-${{ matrix.arch }}
           path: out/*
@@ -68,7 +68,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: dist
           merge-multiple: true
