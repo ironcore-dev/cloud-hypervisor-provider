@@ -4,9 +4,8 @@ on:
 permissions:
   contents: read
 env:
-  #TODO change to upstream once https://github.com/cloud-hypervisor/cloud-hypervisor/pull/8965 is merged
-  CH_REPO: lukasfrank/cloud-hypervisor
-  CH_REF: feat/arm-acpi
+  CH_REPO: cloud-hypervisor/cloud-hypervisor
+  CH_REF: 0ffe6c9148c7d3d4db53a30b965f4748577ef400
   RELEASE_TAG: cloud-hypervisor-fw_cfg
 jobs:
   build:
