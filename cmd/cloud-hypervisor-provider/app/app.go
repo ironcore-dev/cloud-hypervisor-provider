@@ -91,7 +91,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(
 		&o.CloudHypervisorFirmwarePath,
 		"cloud-hypervisor-firmware-path",
-		"/usr/local/bin/hypervisor-fw",
+		"/usr/local/bin/CLOUDHV_EFI.fd",
 		"Path to the cloud-hypervisor firmware.",
 	)
 
