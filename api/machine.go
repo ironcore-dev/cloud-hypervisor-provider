@@ -23,12 +23,17 @@ type MachineSpec struct {
 	Cpu         int64 `json:"cpuMillis"`
 	MemoryBytes int64 `json:"memoryBytes"`
 
-	Ignition []byte `json:"ignition"`
+	Ignition    []byte              `json:"ignition"`
+	GuestConfig *MachineGuestConfig `json:"guestConfig,omitempty"`
 
 	Volumes           []*VolumeSpec           `json:"volumes"`
 	NetworkInterfaces []*NetworkInterfaceSpec `json:"networkInterfaces"`
 
 	ShutdownAt time.Time `json:"shutdownAt,omitempty"`
+}
+
+type MachineGuestConfig struct {
+	HostName string `json:"hostname,omitempty"`
 }
 
 type MachineStatus struct {
@@ -109,11 +114,14 @@ type NetworkInterfaceSpec struct {
 }
 
 type NetworkInterfaceStatus struct {
-	Name   string                `json:"name"`
-	Handle string                `json:"handle"`
-	State  NetworkInterfaceState `json:"state"`
-	Type   NetworkInterfaceType  `json:"type,omitempty"`
-	Path   string                `json:"path,omitempty"`
+	Name       string                `json:"name"`
+	Handle     string                `json:"handle"`
+	State      NetworkInterfaceState `json:"state"`
+	Type       NetworkInterfaceType  `json:"type,omitempty"`
+	Path       string                `json:"path,omitempty"`
+	QueuePairs int                   `json:"queuePairs,omitempty"`
+	Prefixes   []string              `json:"prefixes,omitempty"`
+	Ips        []string              `json:"ips,omitempty"`
 }
 
 type NetworkInterfaceState string

@@ -107,14 +107,15 @@ func (p *Plugin) APInetNicName(machineID string, networkInterfaceName string) st
 func (p *Plugin) Apply(
 	ctx context.Context,
 	spec *api.NetworkInterfaceSpec,
-	machineID string,
+	machine *api.Machine,
 ) (*api.NetworkInterfaceStatus, error) {
 	log := ctrl.LoggerFrom(ctx).WithValues("nicName", spec.Name)
+	machineID := machine.ID
 
 	log.V(1).Info("Reconciling nic")
 
 	log.V(2).Info("Writing network interface dir")
-	if err := os.MkdirAll(p.host.MachineNetworkInterfaceDir(machineID, spec.Name), os.ModePerm); err != nil {
+	if err := os.MkdirAll(p.host.MachineNetworkInterfaceDir(machine.ID, spec.Name), os.ModePerm); err != nil {
 		return nil, err
 	}
 
@@ -162,7 +163,7 @@ func (p *Plugin) Apply(
 			return nil, fmt.Errorf("error getting device info: %w", err)
 		}
 
-		return &api.NetworkInterfaceStatus{
+		status := &api.NetworkInterfaceStatus{
 			Name: spec.Name,
 			Handle: provider.GetNetworkInterfaceID(
 				apinetNic.Namespace,
@@ -173,7 +174,11 @@ func (p *Plugin) Apply(
 			State: api.NetworkInterfaceStatePrepared,
 			Type:  deviceType,
 			Path:  path,
-		}, nil
+		}
+		if deviceType == api.NetworkInterfaceTAPType {
+			status.QueuePairs = networkinterface.QueuePairsForVCPUs(int(machine.Spec.Cpu))
+		}
+		return status, nil
 	}
 
 	log.V(2).Info("Waiting for apinet network interface to become ready")
@@ -203,7 +208,7 @@ func (p *Plugin) Apply(
 			return nil, fmt.Errorf("error getting device info: %w", err)
 		}
 
-		return &api.NetworkInterfaceStatus{
+		status := &api.NetworkInterfaceStatus{
 			Name: spec.Name,
 			Handle: provider.GetNetworkInterfaceID(
 				apinetNic.Namespace,
@@ -214,7 +219,11 @@ func (p *Plugin) Apply(
 			State: api.NetworkInterfaceStatePrepared,
 			Type:  deviceType,
 			Path:  path,
-		}, nil
+		}
+		if deviceType == api.NetworkInterfaceTAPType {
+			status.QueuePairs = networkinterface.QueuePairsForVCPUs(int(machine.Spec.Cpu))
+		}
+		return status, nil
 	}
 
 	return &api.NetworkInterfaceStatus{
