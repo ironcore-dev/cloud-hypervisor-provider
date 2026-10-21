@@ -7,7 +7,7 @@ toolchain go1.26.2
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/digitalocean/go-qemu v0.0.0-20250212194115-ee9b0668d242
-	github.com/getkin/kin-openapi v0.149.0
+	github.com/getkin/kin-openapi v0.150.0
 	github.com/go-logr/logr v1.4.4
 	github.com/google/uuid v1.6.0
 	github.com/ironcore-dev/controller-utils v0.14.0
@@ -15,7 +15,7 @@ require (
 	github.com/ironcore-dev/ironcore-image v0.5.0
 	github.com/ironcore-dev/ironcore-net v0.6.0
 	github.com/ironcore-dev/provider-utils v0.0.0-20260420150206-639a4bf5422f
-	github.com/onsi/ginkgo/v2 v2.33.0
+	github.com/onsi/ginkgo/v2 v2.33.1
 	github.com/onsi/gomega v1.44.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
