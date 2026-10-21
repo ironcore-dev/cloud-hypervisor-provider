@@ -1,9 +1,13 @@
 metadata:
-  annotations:
-    foo: bar
   labels:
-    bar: baz
+    app: local-test
 spec:
-  class: small
-  image:
-    image: ghcr.io/ironcore-dev/ironcore-image/gardenlinux:latest
+  power: 0
+  class: t1
+  volumes:
+    - name: root
+      device: oda
+      local_disk:
+        size_bytes: 5368709120        # 5 GiB
+        image:
+          image: ghcr.io/ironcore-dev/gardenlinux/gardener:2150.12.0-kvm

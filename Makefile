@@ -44,6 +44,35 @@ help: ## Display this help.
 
 ##@ Development
 
+.PHONY: dev-vm-up dev-vm-provider dev-vm-down
+
+dev-vm-up: ## Create the dev VM if needed and start it.
+	@if $(LIMA) list --quiet $(DEV_VM_NAME) 2>/dev/null | grep -Fxq "$(DEV_VM_NAME)"; then \
+		echo "$(DEV_VM_NAME) already exists"; \
+	else \
+		$(LIMA) create --yes --name=$(DEV_VM_NAME) \
+			--set='.portForwards[0].hostSocket = "$(DEV_VM_SOCKET)"' \
+			$(DEV_VM_TEMPLATE); \
+	fi
+	$(LIMA) start --yes $(DEV_VM_NAME)
+	@echo "Provider address: unix://$(DEV_VM_SOCKET)"
+
+dev-vm-provider: dev-vm-up ## Start the provider inside the dev VM.
+	$(LIMA) shell $(DEV_VM_NAME) -- sudo -n -iu chp-dev bash -lc 'cd "$(CURDIR)" && exec go run ./cmd/cloud-hypervisor-provider \
+		--address /run/chp/iri-machinebroker.sock \
+		--provider-root-dir /var/lib/chp \
+		--cloud-hypervisor-firmware-path /usr/local/bin/hypervisor-fw \
+		--network-interface-plugin-name isolated \
+		--machine-class t1,2,1073741824'
+
+dev-vm-down: ## Delete the dev VM.
+	-$(LIMA) delete --yes --force $(DEV_VM_NAME)
+
+LIMA ?= limactl
+DEV_VM_NAME ?= chp-dev
+DEV_VM_TEMPLATE ?= dev-vm/chp-dev.yaml
+DEV_VM_SOCKET ?= $(CURDIR)/iri-machinebroker.sock
+
 .PHONY: manifests
 FILE="config/machinepoollet-broker/broker-rbac/role.yaml"
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
