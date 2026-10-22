@@ -14,6 +14,15 @@ type Plugin interface {
 	Name() string
 	Init(host host.Paths) error
 
-	Apply(ctx context.Context, spec *api.NetworkInterfaceSpec, machineID string) (*api.NetworkInterfaceStatus, error)
+	Apply(ctx context.Context, spec *api.NetworkInterfaceSpec, machine *api.Machine) (*api.NetworkInterfaceStatus, error)
 	Delete(ctx context.Context, computeNicName string, machineID string) error
+}
+
+// QueuePairsForVCPUs returns the deterministic network queue policy used by
+// the provider. Cloud Hypervisor exposes two virtio queues per RX/TX pair.
+func QueuePairsForVCPUs(vcpus int) int {
+	if vcpus <= 1 {
+		return 1
+	}
+	return 2
 }

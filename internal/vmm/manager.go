@@ -270,6 +270,11 @@ func (m *Manager) Status(ctx context.Context, machineID string) (*VMStatus, erro
 			status.NetworkInterfaces = append(status.NetworkInterfaces, name)
 		}
 	}
+	for _, net := range ptr.Deref(info.Config.Net, nil) {
+		if name := getNicName(ptr.Deref(net.Id, "")); name != "" {
+			status.NetworkInterfaces = append(status.NetworkInterfaces, name)
+		}
+	}
 	return status, nil
 }
 
@@ -395,15 +400,28 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 	}
 
 	var dev []client.DeviceConfig
+	var nets []client.NetConfig
 	for _, nic := range machine.Status.NetworkInterfaceStatus {
 		if nic.State != api.NetworkInterfaceStatePrepared {
 			return fmt.Errorf("nic %s is not attached", nic.Name)
 		}
 
-		dev = append(dev, client.DeviceConfig{
-			Id:   new(getNicID(nic.Name)),
-			Path: new(nic.Path),
-		})
+		switch nic.Type {
+		case api.NetworkInterfaceTAPType:
+			net := client.NetConfig{
+				Id:        new(getNicID(nic.Name)),
+				Tap:       new(nic.Path),
+				NumQueues: ptr.To(nic.QueuePairs * 2),
+			}
+			nets = append(nets, net)
+		case api.NetworkInterfacePCIType:
+			dev = append(dev, client.DeviceConfig{
+				Id:   new(getNicID(nic.Name)),
+				Path: new(nic.Path),
+			})
+		default:
+			return fmt.Errorf("nic %s has unknown type %q", nic.Name, nic.Type)
+		}
 	}
 
 	log.V(2).Info("Creating vm")
@@ -418,6 +436,7 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 			Size:   machine.Spec.MemoryBytes,
 			Shared: new(true),
 		},
+		Net: &nets,
 		Console: &client.ConsoleConfig{
 			Mode: "Off",
 		},
@@ -485,16 +504,37 @@ func (m *Manager) AttachNetworkInterface(ctx context.Context, instanceID string,
 		return ErrNotFound
 	}
 
-	resp, err := apiClient.PutVmAddDeviceWithResponse(ctx, client.DeviceConfig{
-		Id:   new(getNicID(nic.Name)),
-		Path: new(nic.Path),
-	})
-	if err != nil {
-		return wrapIfSocketClosed(fmt.Errorf("failed to add device: %w", err))
+	var statusCode int
+	var responseBody []byte
+	switch nic.Type {
+	case api.NetworkInterfaceTAPType:
+		net := client.NetConfig{
+			Id:        new(getNicID(nic.Name)),
+			Tap:       new(nic.Path),
+			NumQueues: ptr.To(nic.QueuePairs * 2),
+		}
+		resp, err := apiClient.PutVmAddNetWithResponse(ctx, net)
+		if err != nil {
+			return wrapIfSocketClosed(fmt.Errorf("failed to add network interface: %w", err))
+		}
+		statusCode = resp.StatusCode()
+		responseBody = resp.Body
+	case api.NetworkInterfacePCIType:
+		resp, err := apiClient.PutVmAddDeviceWithResponse(ctx, client.DeviceConfig{
+			Id:   new(getNicID(nic.Name)),
+			Path: new(nic.Path),
+		})
+		if err != nil {
+			return wrapIfSocketClosed(fmt.Errorf("failed to add network interface: %w", err))
+		}
+		statusCode = resp.StatusCode()
+		responseBody = resp.Body
+	default:
+		return fmt.Errorf("nic %s has unknown type %q", nic.Name, nic.Type)
 	}
 
-	if err := validateStatus(resp.StatusCode()); err != nil {
-		log.V(1).Info("Failed to add nic", "error", string(resp.Body))
+	if err := validateStatus(statusCode); err != nil {
+		log.V(1).Info("Failed to add nic", "error", string(responseBody))
 		return err
 	}
 	log.V(1).Info("Added device", "name", nic.Name)

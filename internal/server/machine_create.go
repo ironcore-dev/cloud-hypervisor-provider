@@ -74,6 +74,11 @@ func (s *Server) createMachineFromIRIMachine(
 			NetworkInterfaces: networkInterfaces,
 		},
 	}
+	if iriMachine.Spec.GuestConfig != nil {
+		machine.Spec.GuestConfig = &api.MachineGuestConfig{
+			HostName: iriMachine.Spec.GuestConfig.Hostname,
+		}
+	}
 
 	if err := api.SetObjectMetadata(machine, iriMachine.Metadata); err != nil {
 		return nil, fmt.Errorf("failed to set metadata: %w", err)
