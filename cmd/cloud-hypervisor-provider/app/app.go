@@ -25,13 +25,13 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/vmm"
 	"github.com/ironcore-dev/ironcore-image/oci/remote"
 	ocistore "github.com/ironcore-dev/ironcore-image/oci/store"
-	"github.com/ironcore-dev/ironcore/broker/common"
-	commongrpc "github.com/ironcore-dev/ironcore/broker/common/grpc"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
 	"github.com/ironcore-dev/provider-utils/eventutils/event"
 	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
+	"github.com/ironcore-dev/provider-utils/grpcutils"
 	ocihostutils "github.com/ironcore-dev/provider-utils/ociutils/host"
 	ociutils "github.com/ironcore-dev/provider-utils/ociutils/oci"
+	"github.com/ironcore-dev/provider-utils/osutils"
 	hostutils "github.com/ironcore-dev/provider-utils/storeutils/host"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -326,14 +326,14 @@ func Run(ctx context.Context, opts Options) error {
 
 func RunGRPCServer(ctx context.Context, setupLog, log logr.Logger, srv *server.Server, address string) error {
 	log.V(1).Info("Cleaning up any previous socket")
-	if err := common.CleanupSocketIfExists(address); err != nil {
+	if err := osutils.CleanupSocketIfExists(address); err != nil {
 		return fmt.Errorf("error cleaning up socket: %w", err)
 	}
 
 	grpcSrv := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
-			commongrpc.InjectLogger(log),
-			commongrpc.LogRequest,
+			grpcutils.InjectLogger(log),
+			grpcutils.LogRequest,
 		),
 	)
 	iri.RegisterMachineRuntimeServer(grpcSrv, srv)

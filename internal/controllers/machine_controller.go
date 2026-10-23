@@ -111,7 +111,7 @@ func (r *MachineReconciler) Start(ctx context.Context) error {
 
 			for _, machine := range machines {
 				if api.IsImageReferenced(machine, evt.Ref) {
-					r.eventRecorder.Eventf(machine.Metadata, corev1.EventTypeNormal, "ImagePullSucceeded", "Pulled image %s", evt.Ref)
+					r.eventRecorder.Eventf(machine.Metadata, corev1.EventTypeNormal, "ImagePullSucceeded", "ImagePull", "Pulled image %s", evt.Ref)
 					log.V(1).Info("Image pulled: Requeue machines", "Image", evt.Ref, "Machine", machine.ID)
 					r.queue.Add(machine.ID)
 				}
@@ -509,7 +509,7 @@ func (r *MachineReconciler) reconcileMachine(ctx context.Context, id string) err
 		if err != nil {
 			if errors.Is(err, ociutils.ErrImagePulling) {
 				log.V(1).Info("Image is pulling, reconcile later")
-				r.eventRecorder.Eventf(machine.Metadata, corev1.EventTypeNormal, "PullingImage", "Pulling image in progress")
+				r.eventRecorder.Eventf(machine.Metadata, corev1.EventTypeNormal, "PullingImage", "ImagePull", "Pulling image in progress")
 				return nil
 			}
 			return err
