@@ -52,6 +52,9 @@ func (s *Server) getIRIMachineSpec(machine *api.Machine) (*iri.MachineSpec, erro
 		Volumes:           s.getIRIVolumeSpec(machine),
 		NetworkInterfaces: s.getIRINICSpec(machine),
 	}
+	if machine.Spec.GuestConfig != nil {
+		spec.GuestConfig = &iri.GuestConfig{Hostname: machine.Spec.GuestConfig.HostName}
+	}
 
 	return spec, nil
 }

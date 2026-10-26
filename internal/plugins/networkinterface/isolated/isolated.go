@@ -32,12 +32,12 @@ func (p *plugin) Init(host host.Paths) error {
 
 func (p *plugin) Apply(ctx context.Context,
 	spec *api.NetworkInterfaceSpec,
-	machineID string,
+	machine *api.Machine,
 ) (*api.NetworkInterfaceStatus, error) {
 	log := ctrl.LoggerFrom(ctx)
 
 	log.V(1).Info("Writing network interface dir")
-	if err := os.MkdirAll(p.host.MachineNetworkInterfaceDir(machineID, spec.Name), os.ModePerm); err != nil {
+	if err := os.MkdirAll(p.host.MachineNetworkInterfaceDir(machine.ID, spec.Name), os.ModePerm); err != nil {
 		return nil, err
 	}
 
@@ -46,7 +46,7 @@ func (p *plugin) Apply(ctx context.Context,
 	}, nil
 }
 
-func (p *plugin) Delete(ctx context.Context, computeNicName string, machineID string) error {
+func (p *plugin) Delete(_ context.Context, computeNicName string, machineID string) error {
 	return os.RemoveAll(p.host.MachineNetworkInterfaceDir(machineID, computeNicName))
 }
 

@@ -337,7 +337,7 @@ func (r *MachineReconciler) reconcileNics(ctx context.Context, log logr.Logger, 
 			log.V(2).Info("NIC attached but deletion timestamp set", "name", nic.Name)
 		}
 
-		appliedNIC, err := plugin.Apply(ctx, nic, machine.ID)
+		appliedNIC, err := plugin.Apply(ctx, nic, machine)
 		if err != nil {
 			return fmt.Errorf("failed to apply NIC: %w", err)
 		}
