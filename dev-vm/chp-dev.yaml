@@ -258,17 +258,12 @@ provision:
 
       cat > /etc/tmpfiles.d/chp.conf <<'EOF'
       d /run/chp     0775 chp chp -
-      d /run/chp/qmp 0775 chp chp -
       EOF
       systemd-tmpfiles --create /etc/tmpfiles.d/chp.conf
 
       systemctl daemon-reload
       systemctl enable cloud-hypervisor-prepare.service
       systemctl start cloud-hypervisor-prepare.service
-
-      apt-get install -y qemu-utils
-      systemctl enable chp-qmp.service
-      systemctl start chp-qmp.service
   - mode: system
     script: |
       #!/bin/bash
@@ -318,12 +313,6 @@ provision:
     permissions: 644
     file:
       url: cloud-hypervisor-prepare.service
-  - mode: data
-    path: /etc/systemd/system/chp-qmp.service
-    owner: "root:root"
-    permissions: 644
-    file:
-      url: chp-qmp.service
 # provision:
 # # `system` is executed with root privileges
 # - mode: system

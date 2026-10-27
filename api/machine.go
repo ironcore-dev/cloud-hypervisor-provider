@@ -96,8 +96,7 @@ const (
 type VolumeType string
 
 const (
-	VolumeSocketType VolumeType = "socket"
-	VolumeFileType   VolumeType = "file"
+	VolumeFileType VolumeType = "file"
 )
 
 type NetworkInterfaceSpec struct {

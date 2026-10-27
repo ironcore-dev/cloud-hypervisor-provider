@@ -4,7 +4,6 @@ go 1.26.4
 
 require (
 	github.com/blang/semver/v4 v4.0.0
-	github.com/digitalocean/go-qemu v0.0.0-20250212194115-ee9b0668d242
 	github.com/getkin/kin-openapi v0.152.0
 	github.com/go-logr/logr v1.4.4
 	github.com/google/uuid v1.6.0
@@ -37,7 +36,6 @@ require (
 	github.com/containerd/log v0.2.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/digitalocean/go-libvirt v0.0.0-20261013170128-efbbdf578ac8 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.14.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
@@ -93,7 +91,6 @@ require (
 	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect

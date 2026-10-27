@@ -378,17 +378,9 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 		}
 
 		disk := client.DiskConfig{
-			Id: new(vol.Handle),
-		}
-
-		switch vol.Type {
-		case api.VolumeSocketType:
-			disk.VhostUser = new(true)
-			disk.VhostSocket = new(vol.Path)
-			disk.Readonly = new(false)
-		case api.VolumeFileType:
-			disk.Path = new(vol.Path)
-			disk.ImageType = new(client.Raw)
+			Id:        new(vol.Handle),
+			Path:      new(vol.Path),
+			ImageType: new(client.Raw),
 		}
 
 		disks = append(disks, disk)
@@ -524,18 +516,9 @@ func (m *Manager) AttachDisk(ctx context.Context, instanceID string, volume *api
 	}
 
 	disk := client.DiskConfig{
-		Id: new(volume.Handle),
-	}
-
-	switch volume.Type {
-	case api.VolumeSocketType:
-		disk.VhostUser = new(true)
-		disk.VhostSocket = new(volume.Path)
-		disk.Readonly = new(false)
-	case api.VolumeFileType:
-		disk.Path = new(volume.Path)
-		// See Create: file-backed disks must declare their image type.
-		disk.ImageType = new(client.Raw)
+		Id:        new(volume.Handle),
+		Path:      new(volume.Path),
+		ImageType: new(client.Raw),
 	}
 
 	resp, err := apiClient.PutVmAddDiskWithResponse(ctx, disk)

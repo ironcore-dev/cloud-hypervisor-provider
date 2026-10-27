@@ -15,9 +15,9 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/controllers"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/mcr"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/options"
+	nicoptions "github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/options"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/ceph"
+	cephoptions "github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/ceph/options"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/localdisk"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/server"
@@ -52,9 +52,8 @@ type Options struct {
 	CloudHypervisorBinPath      string
 	CloudHypervisorFirmwarePath string
 
-	QMPSocketPath string
-
-	NicPlugin *options.Options
+	CephPlugin *cephoptions.Options
+	NicPlugin  *nicoptions.Options
 }
 
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
@@ -72,13 +71,6 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 		"provider-machine-store-dir",
 		"/var/lib/chp/store",
 		"Path to the directory of the machine store.",
-	)
-
-	fs.StringVar(
-		&o.QMPSocketPath,
-		"qmp-socket-path",
-		"/run/chp/qmp/sock",
-		"Path to the qmp socket.",
 	)
 
 	fs.StringVar(
@@ -101,7 +93,10 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 		"Supported machine classes (format: name,cpu,memory)",
 	)
 
-	o.NicPlugin = options.NewDefaultOptions()
+	o.CephPlugin = cephoptions.NewDefaultOptions()
+	o.CephPlugin.AddFlags(fs)
+
+	o.NicPlugin = nicoptions.NewDefaultOptions()
 	o.NicPlugin.AddFlags(fs)
 }
 
@@ -184,20 +179,15 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	qmpProvider, err := ceph.QMPProvider(
-		ctx,
-		log.WithName("ceph-volume-plugin"),
-		hostPaths,
-		opts.QMPSocketPath,
-	)
+	cephPlugin, err := opts.CephPlugin.VolumePlugin(ctx, log.WithName("ceph-volume-plugin"), hostPaths)
 	if err != nil {
-		setupLog.Error(err, "failed to initialize qmp provider")
+		setupLog.Error(err, "failed to initialize ceph volume plugin")
 		return err
 	}
 
 	pluginManager := volume.NewPluginManager()
 	if err := pluginManager.InitPlugins(hostPaths, []volume.Plugin{
-		ceph.NewPlugin(qmpProvider),
+		cephPlugin,
 		localdisk.NewPlugin(rawInst, imgCache),
 	}); err != nil {
 		setupLog.Error(err, "failed to initialize plugins")
