@@ -38,6 +38,11 @@ var _ = Describe("AttachNetworkInterface", func() {
 				Name:      "my-nic",
 				NetworkId: "network-id",
 				Ips:       []string{"10.0.0.1"},
+				Metadata: &irimeta.ObjectMetadata{
+					Id:        "nic-uid-1",
+					Name:      "nic-name-1",
+					Namespace: "nic-namespace-1",
+				},
 			},
 		})).Error().NotTo(HaveOccurred())
 
@@ -49,5 +54,10 @@ var _ = Describe("AttachNetworkInterface", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(updatedMachine.Machines).To(HaveLen(1))
 		Expect(updatedMachine.Machines[0].Spec.NetworkInterfaces).To(HaveLen(1))
+		Expect(updatedMachine.Machines[0].Spec.NetworkInterfaces[0].Metadata).To(Equal(&irimeta.ObjectMetadata{
+			Id:        "nic-uid-1",
+			Name:      "nic-name-1",
+			Namespace: "nic-namespace-1",
+		}))
 	})
 })

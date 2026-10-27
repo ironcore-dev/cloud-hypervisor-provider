@@ -131,8 +131,8 @@ github.com/ironcore-dev/brokers v0.0.0-20260928082849-628cc25fd8ca h1:fLdDpNuymi
 github.com/ironcore-dev/brokers v0.0.0-20260928082849-628cc25fd8ca/go.mod h1:2RWGtX3C0UaYqah5SgglJH2fM9oUu1njzY5oXneVWoI=
 github.com/ironcore-dev/controller-utils v0.15.0 h1:K8vMOeY8rMyZcoL67hGvOZxxPb7rlrR6yS5VvcP6Xig=
 github.com/ironcore-dev/controller-utils v0.15.0/go.mod h1:E/3nSv9TxRtSGpejWMwLTxbb9fknTcPhcA8moHXa0sY=
-github.com/ironcore-dev/ironcore v0.8.1-0.20260924093634-7346f4f9b904 h1:/EDdIi+hDurZy1zJCNprTWaqZQDAg4mo5wW7s78PXUk=
-github.com/ironcore-dev/ironcore v0.8.1-0.20260924093634-7346f4f9b904/go.mod h1:LkAjBGMMwMgomdJK1MqwRyK1IWjMraIZ4NmUxWL24F4=
+github.com/ironcore-dev/ironcore v0.8.1-0.20261005140517-6ec7ff227ec3 h1:yNMKZ/ZSS9q7FV2KD0ZATIygUMbYTXypGb6t5Fq6juY=
+github.com/ironcore-dev/ironcore v0.8.1-0.20261005140517-6ec7ff227ec3/go.mod h1:X0QNN3CcgLwB+nL7w+C+zaCI/l09BKIQELjbZdEa8/s=
 github.com/ironcore-dev/ironcore-image v0.5.0 h1:L4ZLIV5WhOFk4Bp+PtBXut6nYXsCRAoyEiZe+CknPOg=
 github.com/ironcore-dev/ironcore-image v0.5.0/go.mod h1:seDdoS2K31VpL4LlKC9apbLs2fbGrHZEsPBR3dBYMs0=
 github.com/ironcore-dev/ironcore-net v0.6.0 h1:0O81zKDqxUrXkJX2o2ne49bE2PwRRe4C+isShk7ZKuM=

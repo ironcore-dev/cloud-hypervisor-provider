@@ -170,9 +170,12 @@ func (p *Plugin) Apply(
 				apinetNic.Spec.NodeRef.Name,
 				apinetNic.UID,
 			),
-			State: api.NetworkInterfaceStatePrepared,
-			Type:  deviceType,
-			Path:  path,
+			State:     api.NetworkInterfaceStatePrepared,
+			Type:      deviceType,
+			Path:      path,
+			Ips:       toString(apinetNic.Spec.IPs),
+			Prefixes:  toString(apinetNic.Status.Prefixes),
+			VirtualIP: virtualIP(apinetNic),
 		}, nil
 	}
 
@@ -211,9 +214,12 @@ func (p *Plugin) Apply(
 				apinetNic.Spec.NodeRef.Name,
 				apinetNic.UID,
 			),
-			State: api.NetworkInterfaceStatePrepared,
-			Type:  deviceType,
-			Path:  path,
+			State:     api.NetworkInterfaceStatePrepared,
+			Type:      deviceType,
+			Path:      path,
+			Ips:       toString(apinetNic.Spec.IPs),
+			Prefixes:  toString(apinetNic.Status.Prefixes),
+			VirtualIP: virtualIP(apinetNic),
 		}, nil
 	}
 
@@ -221,6 +227,21 @@ func (p *Plugin) Apply(
 		Name:  spec.Name,
 		State: api.NetworkInterfaceStatePending,
 	}, nil
+}
+
+func toString[S fmt.Stringer](ss []S) []string {
+	ret := make([]string, len(ss))
+	for i, s := range ss {
+		ret[i] = s.String()
+	}
+	return ret
+}
+
+func virtualIP(nic *apinetv1alpha1.NetworkInterface) string {
+	if len(nic.Status.PublicIPs) == 0 {
+		return ""
+	}
+	return nic.Status.PublicIPs[0].String()
 }
 
 func getDeviceInfo(status *apinetv1alpha1.NetworkInterfaceStatus) (string, api.NetworkInterfaceType, error) {

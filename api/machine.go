@@ -101,25 +101,37 @@ const (
 )
 
 type NetworkInterfaceSpec struct {
-	Name       string            `json:"name"`
-	NetworkId  string            `json:"networkId"`
-	Ips        []string          `json:"ips"`
-	Attributes map[string]string `json:"attributes"`
-	DeletedAt  *time.Time        `json:"deletedAt,omitempty"`
+	Metadata   *NetworkInterfaceMetadata `json:"metadata,omitempty"`
+	Name       string                    `json:"name"`
+	NetworkId  string                    `json:"networkId"`
+	Ips        []string                  `json:"ips"`
+	Attributes map[string]string         `json:"attributes"`
+	DeletedAt  *time.Time                `json:"deletedAt,omitempty"`
+}
+
+type NetworkInterfaceMetadata struct {
+	ID        string `json:"id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 type NetworkInterfaceStatus struct {
-	Name   string                `json:"name"`
-	Handle string                `json:"handle"`
-	State  NetworkInterfaceState `json:"state"`
-	Type   NetworkInterfaceType  `json:"type,omitempty"`
-	Path   string                `json:"path,omitempty"`
+	Name      string                `json:"name"`
+	Handle    string                `json:"handle"`
+	State     NetworkInterfaceState `json:"state"`
+	Type      NetworkInterfaceType  `json:"type,omitempty"`
+	Path      string                `json:"path,omitempty"`
+	Ips       []string              `json:"ips,omitempty"`
+	Prefixes  []string              `json:"prefixes,omitempty"`
+	VirtualIP string                `json:"virtualIP,omitempty"`
 }
 
 type NetworkInterfaceState string
 
 const (
 	NetworkInterfaceStatePending  NetworkInterfaceState = "Pending"
+	NetworkInterfaceStateReady    NetworkInterfaceState = "Ready"
+	NetworkInterfaceStateError    NetworkInterfaceState = "Error"
 	NetworkInterfaceStatePrepared NetworkInterfaceState = "Prepared"
 	NetworkInterfaceStateAttached NetworkInterfaceState = "Attached"
 )

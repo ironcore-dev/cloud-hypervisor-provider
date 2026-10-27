@@ -9,7 +9,7 @@ require (
 	github.com/go-logr/logr v1.4.4
 	github.com/google/uuid v1.6.0
 	github.com/ironcore-dev/controller-utils v0.15.0
-	github.com/ironcore-dev/ironcore v0.8.1-0.20260924093634-7346f4f9b904
+	github.com/ironcore-dev/ironcore v0.8.1-0.20261005140517-6ec7ff227ec3
 	github.com/ironcore-dev/ironcore-image v0.5.0
 	github.com/ironcore-dev/ironcore-net v0.6.0
 	github.com/ironcore-dev/provider-utils v0.0.0-20261023075413-1d4246454a50

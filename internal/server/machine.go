@@ -8,6 +8,7 @@ import (
 
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	iri "github.com/ironcore-dev/ironcore/iri/apis/machine/v1alpha1"
+	irimeta "github.com/ironcore-dev/ironcore/iri/apis/meta/v1alpha1"
 	"k8s.io/utils/ptr"
 )
 
@@ -104,6 +105,7 @@ func (s *Server) getIRINICSpec(machine *api.Machine) []*iri.NetworkInterface {
 			NetworkId:  nic.NetworkId,
 			Ips:        nic.Ips,
 			Attributes: nic.Attributes,
+			Metadata:   getIRINetworkInterfaceMetadata(nic.Metadata),
 		})
 	}
 
@@ -137,9 +139,12 @@ func (s *Server) getIRINICStatus(machine *api.Machine) ([]*iri.NetworkInterfaceS
 		}
 
 		nics = append(nics, &iri.NetworkInterfaceStatus{
-			Name:   nic.Name,
-			Handle: nic.Handle,
-			State:  state,
+			Name:      nic.Name,
+			Handle:    nic.Handle,
+			State:     state,
+			Ips:       nic.Ips,
+			Prefixes:  nic.Prefixes,
+			VirtualIp: nic.VirtualIP,
 		})
 	}
 
@@ -176,9 +181,13 @@ func (s *Server) getIRINICState(state api.NetworkInterfaceState) (iri.NetworkInt
 	case api.NetworkInterfaceStateAttached:
 		return iri.NetworkInterfaceState_NETWORK_INTERFACE_ATTACHED, nil
 	case api.NetworkInterfaceStatePrepared:
-		fallthrough
+		return iri.NetworkInterfaceState_NETWORK_INTERFACE_READY, nil
+	case api.NetworkInterfaceStateReady:
+		return iri.NetworkInterfaceState_NETWORK_INTERFACE_READY, nil
 	case api.NetworkInterfaceStatePending:
 		return iri.NetworkInterfaceState_NETWORK_INTERFACE_PENDING, nil
+	case api.NetworkInterfaceStateError:
+		return iri.NetworkInterfaceState_NETWORK_INTERFACE_ERROR, nil
 	default:
 		return 0, fmt.Errorf("unknown network interface state '%q'", state)
 	}
@@ -278,9 +287,34 @@ func (s *Server) getNICFromIRINIC(iriNIC *iri.NetworkInterface) (*api.NetworkInt
 	}
 
 	return &api.NetworkInterfaceSpec{
+		Metadata:   getNetworkInterfaceMetadata(iriNIC.Metadata),
 		Name:       iriNIC.Name,
 		NetworkId:  iriNIC.NetworkId,
 		Ips:        iriNIC.Ips,
 		Attributes: iriNIC.Attributes,
 	}, nil
+}
+
+func getIRINetworkInterfaceMetadata(metadata *api.NetworkInterfaceMetadata) *irimeta.ObjectMetadata {
+	if metadata == nil {
+		return nil
+	}
+
+	return &irimeta.ObjectMetadata{
+		Id:        metadata.ID,
+		Name:      metadata.Name,
+		Namespace: metadata.Namespace,
+	}
+}
+
+func getNetworkInterfaceMetadata(metadata *irimeta.ObjectMetadata) *api.NetworkInterfaceMetadata {
+	if metadata == nil {
+		return nil
+	}
+
+	return &api.NetworkInterfaceMetadata{
+		ID:        metadata.Id,
+		Name:      metadata.Name,
+		Namespace: metadata.Namespace,
+	}
 }
