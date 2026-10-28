@@ -122,8 +122,8 @@ func (p *plugin) Apply(ctx context.Context, spec *api.VolumeSpec, machineID stri
 	}, nil
 }
 
-func (p *plugin) Delete(_ context.Context, computeVolumeName string, machineID string) error {
-	return os.RemoveAll(p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), computeVolumeName))
+func (p *plugin) Delete(_ context.Context, spec *api.VolumeSpec, machineID string) error {
+	return os.RemoveAll(p.host.MachineVolumeDir(machineID, utilstrings.EscapeQualifiedName(pluginName), spec.Name))
 }
 
 func generateWWN(machineID, diskName string) string {

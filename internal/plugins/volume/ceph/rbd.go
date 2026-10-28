@@ -36,7 +36,7 @@ func (r *rbdProvider) VolumeType() api.VolumeType {
 
 func (r *rbdProvider) Mount(ctx context.Context, machineID string, volume *validatedVolume) (string, error) {
 	volumeDir := r.volumeDir(machineID, volume.name)
-	if err := os.MkdirAll(volumeDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(volumeDir, 0o700); err != nil {
 		return "", err
 	}
 
@@ -55,7 +55,6 @@ func (r *rbdProvider) Mount(ctx context.Context, machineID string, volume *valid
 
 	if devicePath != "" {
 		log.V(1).Info("RBD image already mapped", "device", devicePath)
-		r.persistDevicePath(volumeDir, devicePath)
 		return devicePath, nil
 	}
 
@@ -65,39 +64,27 @@ func (r *rbdProvider) Mount(ctx context.Context, machineID string, volume *valid
 	}
 
 	log.V(1).Info("Mapped RBD image to device", "device", devicePath)
-	r.persistDevicePath(volumeDir, devicePath)
 	return devicePath, nil
 }
 
-func (r *rbdProvider) Unmount(ctx context.Context, machineID string, volumeName string) error {
-	log := r.log.WithValues("machineID", machineID, "volumeName", volumeName)
+func (r *rbdProvider) Unmount(ctx context.Context, machineID string, volume *validatedVolume) error {
+	log := r.log.WithValues("machineID", machineID, "volumeName", volume.name)
 
-	volumeDir := r.paths.MachineVolumeDir(machineID, cephDriverName, volumeName)
-	if devicePath, err := r.readDevicePath(volumeDir); err == nil && devicePath != "" {
-		log.V(1).Info("Unmapping RBD device from persisted path", "device", devicePath)
-		if err := r.unmapDevice(ctx, devicePath); err != nil {
-			return fmt.Errorf("error unmapping rbd device %s: %w", devicePath, err)
-		}
-		_ = os.Remove(filepath.Join(volumeDir, "device"))
+	device, err := r.findMappedDevice(volume.pool, volume.image)
+	if err != nil {
+		return fmt.Errorf("error querying rbd mappings: %w", err)
+	}
+
+	if device == "" {
+		log.V(1).Info("RBD image not currently mapped, nothing to unmap", "pool", volume.pool, "image", volume.image)
 		return nil
 	}
 
-	log.V(1).Info("No persisted device path found, nothing to unmap")
-	return nil
-}
-
-const deviceFileName = "device"
-
-func (r *rbdProvider) persistDevicePath(volumeDir, devicePath string) {
-	_ = os.WriteFile(filepath.Join(volumeDir, deviceFileName), []byte(devicePath), 0o644)
-}
-
-func (r *rbdProvider) readDevicePath(volumeDir string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(volumeDir, deviceFileName))
-	if err != nil {
-		return "", err
+	log.V(1).Info("Unmapping RBD device", "device", device)
+	if err := r.unmapDevice(ctx, device); err != nil {
+		return fmt.Errorf("error unmapping rbd device %s: %w", device, err)
 	}
-	return strings.TrimSpace(string(data)), nil
+	return nil
 }
 
 func (r *rbdProvider) volumeDir(machineID string, volumeHandle string) string {
@@ -121,14 +108,20 @@ func (r *rbdProvider) createCephConf(log logr.Logger, machineID string, volume *
 		volume.userID,
 		keyPath,
 	)
-	if err := os.WriteFile(confPath, []byte(confData), os.ModePerm); err != nil {
+	if err := os.WriteFile(confPath, []byte(confData), 0o600); err != nil {
 		return "", fmt.Errorf("error writing conf file %s: %w", confPath, err)
+	}
+	if err := os.Chmod(confPath, 0o600); err != nil {
+		return "", fmt.Errorf("error setting permissions on conf file %s: %w", confPath, err)
 	}
 
 	log.V(1).Info("Creating ceph key", "keyPath", keyPath)
 	keyData := fmt.Sprintf("[client.%s]\nkey = %s\n", volume.userID, volume.userKey)
-	if err := os.WriteFile(keyPath, []byte(keyData), os.ModePerm); err != nil {
+	if err := os.WriteFile(keyPath, []byte(keyData), 0o600); err != nil {
 		return "", fmt.Errorf("error writing key file %s: %w", keyPath, err)
+	}
+	if err := os.Chmod(keyPath, 0o600); err != nil {
+		return "", fmt.Errorf("error setting permissions on key file %s: %w", keyPath, err)
 	}
 
 	return confPath, nil

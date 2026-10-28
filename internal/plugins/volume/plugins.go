@@ -25,7 +25,7 @@ type Plugin interface {
 	CanSupport(spec *api.VolumeSpec) bool
 
 	Apply(ctx context.Context, spec *api.VolumeSpec, machineID string) (*api.VolumeStatus, error)
-	Delete(ctx context.Context, computeVolumeName string, machineID string) error
+	Delete(ctx context.Context, spec *api.VolumeSpec, machineID string) error
 }
 
 type PluginManager struct {

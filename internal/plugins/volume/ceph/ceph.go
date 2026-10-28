@@ -45,7 +45,7 @@ type validatedVolume struct {
 type backend interface {
 	VolumeType() api.VolumeType
 	Mount(ctx context.Context, machineID string, volume *validatedVolume) (string, error)
-	Unmount(ctx context.Context, machineID string, volumeID string) error
+	Unmount(ctx context.Context, machineID string, volume *validatedVolume) error
 }
 
 // NewRBDPlugin creates a volume.Plugin backed by host-level rbd map/unmap.
@@ -212,10 +212,43 @@ func (p *plugin) validateVolume(spec *api.VolumeSpec) (vData *validatedVolume, e
 	return vData, nil
 }
 
-func (p *plugin) Delete(ctx context.Context, computeVolumeName string, machineID string) error {
-	if err := p.be.Unmount(ctx, machineID, computeVolumeName); err != nil {
-		return fmt.Errorf("failed to unmount volume %q: %w", computeVolumeName, err)
+func (p *plugin) Delete(ctx context.Context, spec *api.VolumeSpec, machineID string) error {
+	volume, err := p.volumeForUnmount(spec)
+	if err != nil {
+		return fmt.Errorf("failed to get volume data for deletion: %w", err)
 	}
 
-	return os.RemoveAll(p.host.MachineVolumeDir(machineID, cephDriverName, computeVolumeName))
+	if err := p.be.Unmount(ctx, machineID, volume); err != nil {
+		return fmt.Errorf("failed to unmount volume %q: %w", spec.Name, err)
+	}
+
+	return os.RemoveAll(p.host.MachineVolumeDir(machineID, cephDriverName, spec.Name))
+}
+
+func (p *plugin) volumeForUnmount(spec *api.VolumeSpec) (*validatedVolume, error) {
+	if spec == nil {
+		return nil, fmt.Errorf("volume is nil")
+	}
+	connection := spec.Connection
+	if connection == nil {
+		return nil, fmt.Errorf("volume does not specify connection")
+	}
+	if connection.Driver != cephDriverName {
+		return nil, fmt.Errorf("volume connection specifies invalid driver %q", connection.Driver)
+	}
+	if connection.Attributes == nil {
+		return nil, fmt.Errorf("volume connection does not specify attributes")
+	}
+	if connection.Handle == "" {
+		return nil, fmt.Errorf("volume connection does not specify handle")
+	}
+
+	volume := &validatedVolume{
+		name:   spec.Name,
+		handle: connection.Handle,
+	}
+	if err := readVolumeAttributes(connection.Attributes, volume); err != nil {
+		return nil, fmt.Errorf("error reading volume attributes: %w", err)
+	}
+	return volume, nil
 }
