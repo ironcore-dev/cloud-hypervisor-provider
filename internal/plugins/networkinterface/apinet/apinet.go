@@ -9,18 +9,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
 	apinetv1alpha1 "github.com/ironcore-dev/ironcore-net/api/core/v1alpha1"
 	apinet "github.com/ironcore-dev/ironcore-net/apimachinery/api/net"
 	"github.com/ironcore-dev/ironcore-net/apinetlet/provider"
 	apinetv1alpha1apply "github.com/ironcore-dev/ironcore-net/client-go/applyconfigurations/core/v1alpha1"
+	plugin "github.com/ironcore-dev/provider-utils/plugin"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,16 +45,12 @@ type Plugin struct {
 	apinetClient client.Client
 }
 
-func NewPlugin(nodeName string, client client.Client) networkinterface.Plugin {
+func NewPlugin(nodeName string, client client.Client, paths host.Paths) networkinterface.Plugin {
 	return &Plugin{
 		nodeName:     nodeName,
+		host:         paths,
 		apinetClient: client,
 	}
-}
-
-func (p *Plugin) Init(host host.Paths) error {
-	p.host = host
-	return nil
 }
 
 func ironcoreIPsToAPInetIPs(ips []string) []apinet.IP {
@@ -106,9 +103,9 @@ func (p *Plugin) APInetNicName(machineID string, networkInterfaceName string) st
 
 func (p *Plugin) Apply(
 	ctx context.Context,
-	spec *api.NetworkInterfaceSpec,
+	spec *plugin.NetworkInterfaceSpec,
 	machineID string,
-) (*api.NetworkInterfaceStatus, error) {
+) (*plugin.NetworkInterfaceStatus, error) {
 	log := ctrl.LoggerFrom(ctx).WithValues("nicName", spec.Name)
 
 	log.V(1).Info("Reconciling nic")
@@ -143,6 +140,7 @@ func (p *Plugin) Apply(
 			WithNodeRef(corev1.LocalObjectReference{
 				Name: p.nodeName,
 			}).
+			WithHostname(spec.Hostname).
 			WithIPs(ironcoreIPsToAPInetIPs(spec.Ips)...),
 		)
 
@@ -157,26 +155,7 @@ func (p *Plugin) Apply(
 	}
 
 	if apinetNic.Status.State == apinetv1alpha1.NetworkInterfaceStateReady {
-		path, deviceType, err := getDeviceInfo(&apinetNic.Status)
-		if err != nil {
-			return nil, fmt.Errorf("error getting device info: %w", err)
-		}
-
-		return &api.NetworkInterfaceStatus{
-			Name: spec.Name,
-			Handle: provider.GetNetworkInterfaceID(
-				apinetNic.Namespace,
-				apinetNic.Name,
-				apinetNic.Spec.NodeRef.Name,
-				apinetNic.UID,
-			),
-			State:     api.NetworkInterfaceStatePrepared,
-			Type:      deviceType,
-			Path:      path,
-			Ips:       toString(apinetNic.Spec.IPs),
-			Prefixes:  toString(apinetNic.Status.Prefixes),
-			VirtualIP: virtualIP(apinetNic),
-		}, nil
+		return getPluginStatus(apinetNic)
 	}
 
 	log.V(2).Info("Waiting for apinet network interface to become ready")
@@ -190,7 +169,8 @@ func (p *Plugin) Apply(
 				return false, fmt.Errorf("error getting apinet nic %s: %w", apinetNicKey, err)
 			}
 
-			return apinetNic.Status.State == apinetv1alpha1.NetworkInterfaceStateReady, nil
+			return apinetNic.Status.State == apinetv1alpha1.NetworkInterfaceStateReady ||
+				apinetNic.Status.State == apinetv1alpha1.NetworkInterfaceStateError, nil
 		}); err != nil {
 		return nil, fmt.Errorf("error waiting for nic to become ready: %w", err)
 	}
@@ -200,51 +180,93 @@ func (p *Plugin) Apply(
 		return nil, fmt.Errorf("error fetching updated apinet network interface: %w", err)
 	}
 
-	if apinetNic.Status.State == apinetv1alpha1.NetworkInterfaceStateReady {
-		path, deviceType, err := getDeviceInfo(&apinetNic.Status)
+	return getPluginStatus(apinetNic)
+}
+
+func getPluginStatus(nic *apinetv1alpha1.NetworkInterface) (*plugin.NetworkInterfaceStatus, error) {
+	switch nic.Status.State {
+	case apinetv1alpha1.NetworkInterfaceStatePending:
+		return &plugin.NetworkInterfaceStatus{State: plugin.NetworkInterfaceStatePending}, nil
+	case apinetv1alpha1.NetworkInterfaceStateError:
+		return &plugin.NetworkInterfaceStatus{State: plugin.NetworkInterfaceStateError}, nil
+	case apinetv1alpha1.NetworkInterfaceStateReady:
+		pci, tap, err := getDeviceInfo(&nic.Status)
 		if err != nil {
 			return nil, fmt.Errorf("error getting device info: %w", err)
 		}
+		ips, err := toNetipAddrs(nic.Spec.IPs)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing IPs: %w", err)
+		}
+		prefix, err := toNetipPrefix(nic.Status.Prefixes)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing prefixes: %w", err)
+		}
+		virtualIP, err := virtualIP(nic)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing virtual IP: %w", err)
+		}
 
-		return &api.NetworkInterfaceStatus{
-			Name: spec.Name,
+		return &plugin.NetworkInterfaceStatus{
 			Handle: provider.GetNetworkInterfaceID(
-				apinetNic.Namespace,
-				apinetNic.Name,
-				apinetNic.Spec.NodeRef.Name,
-				apinetNic.UID,
+				nic.Namespace,
+				nic.Name,
+				nic.Spec.NodeRef.Name,
+				nic.UID,
 			),
-			State:     api.NetworkInterfaceStatePrepared,
-			Type:      deviceType,
-			Path:      path,
-			Ips:       toString(apinetNic.Spec.IPs),
-			Prefixes:  toString(apinetNic.Status.Prefixes),
-			VirtualIP: virtualIP(apinetNic),
+			State:     plugin.NetworkInterfaceStateReady,
+			Ips:       ips,
+			Prefixes:  prefix,
+			VirtualIp: virtualIP,
+			PCI:       pci,
+			TAP:       tap,
 		}, nil
+	default:
+		return nil, fmt.Errorf("unknown APINet network interface state %q", nic.Status.State)
 	}
-
-	return &api.NetworkInterfaceStatus{
-		Name:  spec.Name,
-		State: api.NetworkInterfaceStatePending,
-	}, nil
 }
 
-func toString[S fmt.Stringer](ss []S) []string {
-	ret := make([]string, len(ss))
+func toNetipAddrs[S fmt.Stringer](ss []S) ([]netip.Addr, error) {
+	ret := make([]netip.Addr, 0, len(ss))
 	for i, s := range ss {
-		ret[i] = s.String()
+		addr, err := netip.ParseAddr(s.String())
+		if err != nil {
+			return nil, fmt.Errorf("invalid IP at index %d: %w", i, err)
+		}
+		ret = append(ret, addr)
 	}
-	return ret
+	return ret, nil
 }
 
-func virtualIP(nic *apinetv1alpha1.NetworkInterface) string {
+func toNetipPrefix[S fmt.Stringer](ss []S) (netip.Prefix, error) {
+	if len(ss) > 1 {
+		return netip.Prefix{}, fmt.Errorf("got %d prefixes, want at most one", len(ss))
+	}
+	if len(ss) == 0 {
+		return netip.Prefix{}, nil
+	}
+	prefix, err := netip.ParsePrefix(ss[0].String())
+	if err != nil {
+		return netip.Prefix{}, fmt.Errorf("invalid prefix: %w", err)
+	}
+	return prefix, nil
+}
+
+func virtualIP(nic *apinetv1alpha1.NetworkInterface) (netip.Addr, error) {
 	if len(nic.Status.PublicIPs) == 0 {
-		return ""
+		return netip.Addr{}, nil
 	}
-	return nic.Status.PublicIPs[0].String()
+	addr, err := netip.ParseAddr(nic.Status.PublicIPs[0].String())
+	if err != nil {
+		return netip.Addr{}, fmt.Errorf("invalid virtual IP: %w", err)
+	}
+	return addr, nil
 }
 
-func getDeviceInfo(status *apinetv1alpha1.NetworkInterfaceStatus) (string, api.NetworkInterfaceType, error) {
+func getDeviceInfo(status *apinetv1alpha1.NetworkInterfaceStatus) (*plugin.PCI, *plugin.TAP, error) {
+	if status.PCIAddress != nil && status.TAPDevice != nil {
+		return nil, nil, fmt.Errorf("both TAP device and PCI address found")
+	}
 	if status.PCIAddress != nil {
 		pciDevice := status.PCIAddress
 		pciAddress := fmt.Sprintf("%s:%s:%s.%s",
@@ -254,14 +276,14 @@ func getDeviceInfo(status *apinetv1alpha1.NetworkInterfaceStatus) (string, api.N
 			pciDevice.Function,
 		)
 
-		return fmt.Sprintf("/sys/bus/pci/devices/%s", pciAddress), api.NetworkInterfacePCIType, nil
+		return &plugin.PCI{BDF: pciAddress}, nil, nil
 	}
 
 	if status.TAPDevice != nil {
-		return status.TAPDevice.Name, api.NetworkInterfaceTAPType, nil
+		return nil, &plugin.TAP{Name: status.TAPDevice.Name}, nil
 	}
 
-	return "", "", fmt.Errorf("no TAP device or PCI address found")
+	return nil, nil, fmt.Errorf("no TAP device or PCI address found")
 }
 
 func (p *Plugin) Delete(ctx context.Context, computeNicName string, machineID string) error {

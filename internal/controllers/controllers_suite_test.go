@@ -13,7 +13,6 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/api"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/controllers"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/isolated"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/volume/localdisk"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/raw"
@@ -25,6 +24,7 @@ import (
 	"github.com/ironcore-dev/provider-utils/eventutils/recorder"
 	ocihostutils "github.com/ironcore-dev/provider-utils/ociutils/host"
 	ociutils "github.com/ironcore-dev/provider-utils/ociutils/oci"
+	plugin "github.com/ironcore-dev/provider-utils/plugin"
 	hostutils "github.com/ironcore-dev/provider-utils/storeutils/host"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -44,6 +44,20 @@ var (
 	eventRecorder *recorder.Store
 	hostPaths     host.Paths
 )
+
+type testNetworkInterfacePlugin struct{}
+
+func (testNetworkInterfacePlugin) Name() string {
+	return "test"
+}
+
+func (testNetworkInterfacePlugin) Apply(context.Context, *plugin.NetworkInterfaceSpec, string) (*plugin.NetworkInterfaceStatus, error) {
+	return &plugin.NetworkInterfaceStatus{State: plugin.NetworkInterfaceStatePending}, nil
+}
+
+func (testNetworkInterfacePlugin) Delete(context.Context, string, string) error {
+	return nil
+}
 
 func TestControllers(t *testing.T) {
 	SetDefaultConsistentlyPollingInterval(pollingInterval)
@@ -88,8 +102,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 		localdisk.NewPlugin(rawInst, imgCache),
 	})).NotTo(HaveOccurred())
 
-	nicPlugin := isolated.NewPlugin()
-	Expect(nicPlugin.Init(hostPaths)).NotTo(HaveOccurred())
+	var nicPlugin plugin.NetworkInterface = testNetworkInterfacePlugin{}
 
 	machineStore, err = hostutils.NewStore[*api.Machine](hostutils.Options[*api.Machine]{
 		Dir:            path.Join(rootDir, "store"),

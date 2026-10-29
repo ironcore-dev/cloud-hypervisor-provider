@@ -27,8 +27,13 @@ type MachineSpec struct {
 
 	Volumes           []*VolumeSpec           `json:"volumes"`
 	NetworkInterfaces []*NetworkInterfaceSpec `json:"networkInterfaces"`
+	GuestConfig       *MachineGuestConfig     `json:"guestConfig,omitempty"`
 
 	ShutdownAt time.Time `json:"shutdownAt,omitempty"`
+}
+
+type MachineGuestConfig struct {
+	HostName string `json:"hostName,omitempty"`
 }
 
 type MachineStatus struct {

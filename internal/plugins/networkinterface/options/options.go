@@ -7,14 +7,15 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
+	plugin "github.com/ironcore-dev/provider-utils/plugin"
 	"github.com/spf13/pflag"
 )
 
 type TypeOptions interface {
 	PluginName() string
 	AddFlags(fs *pflag.FlagSet)
-	NetworkInterfacePlugin() (networkinterface.Plugin, func(), error)
+	NetworkInterfacePlugin(host.Paths) (plugin.NetworkInterface, func(), error)
 }
 
 type TypeOptionsRegistry struct {
@@ -109,13 +110,13 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	})
 }
 
-func (o *Options) NetworkInterfacePlugin() (networkinterface.Plugin, func(), error) {
+func (o *Options) NetworkInterfacePlugin(paths host.Paths) (plugin.NetworkInterface, func(), error) {
 	pluginOpts, err := o.registry.PluginTypeOptsByName(o.PluginName)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	nicPlugin, cleanup, err := pluginOpts.NetworkInterfacePlugin()
+	nicPlugin, cleanup, err := pluginOpts.NetworkInterfacePlugin(paths)
 	if err != nil {
 		return nil, nil, err
 	}

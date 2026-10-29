@@ -60,6 +60,13 @@ func (s *Server) createMachineFromIRIMachine(
 		networkInterfaces = append(networkInterfaces, networkInterfaceSpec)
 	}
 
+	var guestConfig *api.MachineGuestConfig
+	if iriMachine.Spec.GetGuestConfig() != nil {
+		guestConfig = &api.MachineGuestConfig{
+			HostName: iriMachine.Spec.GuestConfig.Hostname,
+		}
+	}
+
 	machine := &api.Machine{
 		Metadata: apiutils.Metadata{
 			ID: s.idGen.Generate(),
@@ -71,6 +78,7 @@ func (s *Server) createMachineFromIRIMachine(
 			Volumes:           volumes,
 			Ignition:          iriMachine.Spec.IgnitionData,
 			NetworkInterfaces: networkInterfaces,
+			GuestConfig:       guestConfig,
 		},
 	}
 

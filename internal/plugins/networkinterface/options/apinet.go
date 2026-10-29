@@ -6,9 +6,10 @@ package options
 import (
 	"fmt"
 
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface"
+	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/apinet"
 	apinetv1alpha1 "github.com/ironcore-dev/ironcore-net/api/core/v1alpha1"
+	plugin "github.com/ironcore-dev/provider-utils/plugin"
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -41,7 +42,7 @@ func (o *apinetOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.ApinetKubeconfig, "apinet-kubeconfig", "", "Path to the kubeconfig file for the apinet-cluster.")
 }
 
-func (o *apinetOptions) NetworkInterfacePlugin() (networkinterface.Plugin, func(), error) {
+func (o *apinetOptions) NetworkInterfacePlugin(paths host.Paths) (plugin.NetworkInterface, func(), error) {
 	if o.APInetNodeName == "" {
 		return nil, nil, fmt.Errorf("must specify apinet-node-name")
 	}
@@ -67,7 +68,7 @@ func (o *apinetOptions) NetworkInterfacePlugin() (networkinterface.Plugin, func(
 		return nil, nil, fmt.Errorf("failed to initialize api-net client: %w", err)
 	}
 
-	return apinet.NewPlugin(o.APInetNodeName, apinetClient), nil, nil
+	return apinet.NewPlugin(o.APInetNodeName, apinetClient, paths), nil, nil
 }
 
 func init() {

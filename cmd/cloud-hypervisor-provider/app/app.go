@@ -194,18 +194,13 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	nicPlugin, nicPluginCleanup, err := opts.NicPlugin.NetworkInterfacePlugin()
+	nicPlugin, nicPluginCleanup, err := opts.NicPlugin.NetworkInterfacePlugin(hostPaths)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize network plugin")
 		return err
 	}
 	if nicPluginCleanup != nil {
 		defer nicPluginCleanup()
-	}
-
-	if err := nicPlugin.Init(hostPaths); err != nil {
-		setupLog.Error(err, "failed to initialize network plugin")
-		return err
 	}
 
 	machineStore, err := hostutils.NewStore[*api.Machine](hostutils.Options[*api.Machine]{

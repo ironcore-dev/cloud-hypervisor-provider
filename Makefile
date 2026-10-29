@@ -58,11 +58,13 @@ dev-vm-up: ## Create the dev VM if needed and start it.
 	@echo "Provider address: unix://$(DEV_VM_SOCKET)"
 
 dev-vm-provider: dev-vm-up ## Start the provider inside the dev VM.
+	@test -n "$(APINET_NODE_NAME)" || (echo "APINET_NODE_NAME must be set"; exit 1)
 	$(LIMA) shell $(DEV_VM_NAME) -- sudo -n -iu chp-dev bash -lc 'cd "$(CURDIR)" && exec go run ./cmd/cloud-hypervisor-provider \
 		--address /run/chp/iri-machinebroker.sock \
 		--provider-root-dir /var/lib/chp \
 		--cloud-hypervisor-firmware-path /usr/local/bin/hypervisor-fw \
-		--network-interface-plugin-name isolated \
+		--apinet-node-name "$(APINET_NODE_NAME)" \
+		--apinet-kubeconfig "$(APINET_KUBECONFIG)" \
 		--machine-class t1,2,1073741824'
 
 dev-vm-down: ## Delete the dev VM.
@@ -72,6 +74,8 @@ LIMA ?= limactl
 DEV_VM_NAME ?= chp-dev
 DEV_VM_TEMPLATE ?= dev-vm/chp-dev.yaml
 DEV_VM_SOCKET ?= $(CURDIR)/iri-machinebroker.sock
+APINET_NODE_NAME ?=
+APINET_KUBECONFIG ?=
 
 .PHONY: manifests
 FILE="config/machinepoollet-broker/broker-rbac/role.yaml"

@@ -320,6 +320,10 @@ func (r *MachineReconciler) reconcileNics(ctx context.Context, log logr.Logger, 
 	var updatedNICSpec []*api.NetworkInterfaceSpec
 
 	plugin := r.networkInterfacePlugin
+	hostname := ""
+	if machine.Spec.GuestConfig != nil {
+		hostname = machine.Spec.GuestConfig.HostName
+	}
 	for _, nic := range machine.Spec.NetworkInterfaces {
 
 		log.V(2).Info("Reconcile NIC", "name", nic.Name, "plugin", plugin.Name())
@@ -337,9 +341,13 @@ func (r *MachineReconciler) reconcileNics(ctx context.Context, log logr.Logger, 
 			log.V(2).Info("NIC attached but deletion timestamp set", "name", nic.Name)
 		}
 
-		appliedNIC, err := plugin.Apply(ctx, nic, machine.ID)
+		appliedPluginNIC, err := plugin.Apply(ctx, networkinterface.ToPluginSpec(nic, hostname), machine.ID)
 		if err != nil {
 			return fmt.Errorf("failed to apply NIC: %w", err)
+		}
+		appliedNIC, err := networkinterface.FromPluginStatus(nic.Name, appliedPluginNIC)
+		if err != nil {
+			return fmt.Errorf("failed to convert applied NIC status: %w", err)
 		}
 		if status.State == api.NetworkInterfaceStateAttached {
 			appliedNIC.State = status.State
