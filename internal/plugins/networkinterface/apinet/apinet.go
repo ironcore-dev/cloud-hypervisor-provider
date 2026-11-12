@@ -198,7 +198,7 @@ func getPluginStatus(nic *apinetv1alpha1.NetworkInterface) (*plugin.NetworkInter
 		if err != nil {
 			return nil, fmt.Errorf("error parsing IPs: %w", err)
 		}
-		prefix, err := toNetipPrefix(nic.Status.Prefixes)
+		prefixes, err := toNetipPrefixes(nic.Status.Prefixes)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing prefixes: %w", err)
 		}
@@ -216,7 +216,7 @@ func getPluginStatus(nic *apinetv1alpha1.NetworkInterface) (*plugin.NetworkInter
 			),
 			State:     plugin.NetworkInterfaceStateReady,
 			Ips:       ips,
-			Prefixes:  prefix,
+			Prefixes:  prefixes,
 			VirtualIp: virtualIP,
 			PCI:       pci,
 			TAP:       tap,
@@ -238,18 +238,16 @@ func toNetipAddrs[S fmt.Stringer](ss []S) ([]netip.Addr, error) {
 	return ret, nil
 }
 
-func toNetipPrefix[S fmt.Stringer](ss []S) (netip.Prefix, error) {
-	if len(ss) > 1 {
-		return netip.Prefix{}, fmt.Errorf("got %d prefixes, want at most one", len(ss))
+func toNetipPrefixes[S fmt.Stringer](ss []S) ([]netip.Prefix, error) {
+	prefixes := make([]netip.Prefix, 0, len(ss))
+	for i, s := range ss {
+		prefix, err := netip.ParsePrefix(s.String())
+		if err != nil {
+			return nil, fmt.Errorf("invalid prefix at index %d: %w", i, err)
+		}
+		prefixes = append(prefixes, prefix)
 	}
-	if len(ss) == 0 {
-		return netip.Prefix{}, nil
-	}
-	prefix, err := netip.ParsePrefix(ss[0].String())
-	if err != nil {
-		return netip.Prefix{}, fmt.Errorf("invalid prefix: %w", err)
-	}
-	return prefix, nil
+	return prefixes, nil
 }
 
 func virtualIP(nic *apinetv1alpha1.NetworkInterface) (netip.Addr, error) {
@@ -286,7 +284,11 @@ func getDeviceInfo(status *apinetv1alpha1.NetworkInterfaceStatus) (*plugin.PCI, 
 	return nil, nil, fmt.Errorf("no TAP device or PCI address found")
 }
 
-func (p *Plugin) Delete(ctx context.Context, computeNicName string, machineID string) error {
+func (p *Plugin) Delete(ctx context.Context, spec *plugin.NetworkInterfaceSpec, machineID string) error {
+	if spec == nil {
+		return fmt.Errorf("network interface spec must not be nil")
+	}
+	computeNicName := spec.Name
 	log := ctrl.LoggerFrom(ctx)
 
 	log.V(2).Info("Reading APINet network interface config file")

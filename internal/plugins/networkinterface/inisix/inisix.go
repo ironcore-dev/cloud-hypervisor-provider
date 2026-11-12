@@ -141,13 +141,13 @@ func (p *Plugin) Apply(ctx context.Context, spec *providerplugin.NetworkInterfac
 	if len(result.Prefixes) == 0 {
 		return nil, fmt.Errorf("inisix ADD for attachment %q returned no prefixes", attachmentName)
 	}
-	if len(result.Prefixes) > 1 {
-		return nil, fmt.Errorf("inisix ADD for attachment %q returned %d prefixes, but the provider plugin contract supports one", attachmentName, len(result.Prefixes))
-	}
-
-	prefix, err := netip.ParsePrefix(result.Prefixes[0])
-	if err != nil {
-		return nil, fmt.Errorf("inisix ADD for attachment %q returned invalid prefix %q: %w", attachmentName, result.Prefixes[0], err)
+	prefixes := make([]netip.Prefix, 0, len(result.Prefixes))
+	for i, value := range result.Prefixes {
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil {
+			return nil, fmt.Errorf("inisix ADD for attachment %q returned invalid prefix at index %d %q: %w", attachmentName, i, value, err)
+		}
+		prefixes = append(prefixes, prefix)
 	}
 
 	ips := make([]netip.Addr, 0, len(result.IPs))
@@ -162,7 +162,7 @@ func (p *Plugin) Apply(ctx context.Context, spec *providerplugin.NetworkInterfac
 	status := &providerplugin.NetworkInterfaceStatus{
 		Handle:   result.Handle,
 		State:    providerplugin.NetworkInterfaceStateReady,
-		Prefixes: prefix,
+		Prefixes: prefixes,
 		Ips:      ips,
 	}
 	switch {
@@ -186,13 +186,16 @@ func (p *Plugin) Apply(ctx context.Context, spec *providerplugin.NetworkInterfac
 	return status, nil
 }
 
-func (p *Plugin) Delete(ctx context.Context, computeNicName string, machineID string) error {
-	attachmentName := AttachmentName(machineID, computeNicName)
+func (p *Plugin) Delete(ctx context.Context, spec *providerplugin.NetworkInterfaceSpec, machineID string) error {
+	if spec == nil {
+		return fmt.Errorf("network interface spec must not be nil")
+	}
+	attachmentName := AttachmentName(machineID, spec.Name)
 	if err := p.run(ctx, commandDel, request{Name: attachmentName}, nil); err != nil {
 		return err
 	}
 
-	return os.RemoveAll(p.host.MachineNetworkInterfaceDir(machineID, computeNicName))
+	return os.RemoveAll(p.host.MachineNetworkInterfaceDir(machineID, spec.Name))
 }
 
 func AttachmentName(machineID, networkInterfaceName string) string {

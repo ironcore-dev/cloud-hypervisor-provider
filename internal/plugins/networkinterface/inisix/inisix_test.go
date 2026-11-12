@@ -39,7 +39,7 @@ func TestApplyTAP(t *testing.T) {
 	if status.TAP == nil || status.TAP.Name != "isx-test" {
 		t.Fatalf("unexpected TAP status: %#v", status.TAP)
 	}
-	if !status.Prefixes.IsValid() || status.Prefixes.String() != "2001:db8:1::/64" {
+	if len(status.Prefixes) != 1 || status.Prefixes[0].String() != "2001:db8:1::/64" {
 		t.Fatalf("unexpected prefix: %v", status.Prefixes)
 	}
 	if len(status.Ips) != 1 || status.Ips[0].String() != "2001:db8:1::1" {
@@ -70,7 +70,7 @@ func TestDeleteRemovesDirectory(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := plugin.Delete(t.Context(), "nic0", "machine-id"); err != nil {
+	if err := plugin.Delete(t.Context(), &providerplugin.NetworkInterfaceSpec{Name: "nic0"}, "machine-id"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
