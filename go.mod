@@ -7,16 +7,16 @@ require (
 	github.com/getkin/kin-openapi v0.152.0
 	github.com/go-logr/logr v1.4.4
 	github.com/google/uuid v1.6.0
-	github.com/ironcore-dev/controller-utils v0.15.0
-	github.com/ironcore-dev/ironcore v0.8.1-0.20261005140517-6ec7ff227ec3
+	github.com/ironcore-dev/controller-utils v0.15.1
+	github.com/ironcore-dev/ironcore v0.9.0
 	github.com/ironcore-dev/ironcore-image v0.5.0
-	github.com/ironcore-dev/ironcore-net v0.6.0
+	github.com/ironcore-dev/ironcore-net v0.7.0
 	github.com/ironcore-dev/provider-utils v0.0.0-20261023075413-1d4246454a50
-	github.com/onsi/ginkgo/v2 v2.33.1
+	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.10
-	golang.org/x/sync v0.24.0
+	github.com/spf13/pflag v1.1.0
+	golang.org/x/sync v0.25.0
 	google.golang.org/grpc v1.85.0
 	k8s.io/api v0.37.1
 	k8s.io/apimachinery v0.37.1
