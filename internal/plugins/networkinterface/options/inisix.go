@@ -4,42 +4,54 @@
 package options
 
 import (
+	"fmt"
+	"net/netip"
+	"os"
+
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
-	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/plugins/networkinterface/inisix"
 	providerplugin "github.com/ironcore-dev/provider-utils/plugin"
 	"github.com/spf13/pflag"
+	upstream "go.moehl.dev/ironcore/inisix"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
 type inisixOptions struct {
-	PluginPath  string
-	Mode        string
 	PrefixStore string
-	VFStore     string
+	DNSServers  []string
 }
 
 func (o *inisixOptions) PluginName() string {
-	return inisix.PluginName
+	return "inisix"
 }
 
 func (o *inisixOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&o.PluginPath, "inisix-plugin-path", "/usr/local/bin/inisix", "Path to the inisix plugin executable")
-	fs.StringVar(&o.Mode, "inisix-mode", "tap", "inisix mode (tap or vf)")
 	fs.StringVar(&o.PrefixStore, "inisix-prefix-store", "", "Path to the inisix IPv6 prefix store")
-	fs.StringVar(&o.VFStore, "inisix-vf-store", "", "Path to the inisix virtual-function store")
+	fs.StringSliceVar(&o.DNSServers, "inisix-dns-server", nil, "IPv6 DNS server announced to guests; repeatable")
 }
 
-func (o *inisixOptions) NetworkInterfacePlugin(paths host.Paths) (providerplugin.NetworkInterface, func(), error) {
-	plugin, err := inisix.NewPlugin(paths, inisix.Config{
-		PluginPath:  o.PluginPath,
-		Mode:        o.Mode,
-		PrefixStore: o.PrefixStore,
-		VFStore:     o.VFStore,
-	})
-	if err != nil {
-		return nil, nil, err
+func (o *inisixOptions) NetworkInterfacePlugin(_ host.Paths) (providerplugin.NetworkInterface, error) {
+	storePath := o.PrefixStore
+	if storePath == "" {
+		storePath = os.Getenv("INISIX_PREFIX_STORE")
 	}
-	return plugin, nil, nil
+	if storePath == "" {
+		storePath = "/var/lib/inisix/prefixes.json"
+	}
+
+	dnsServers := make([]netip.Addr, 0, len(o.DNSServers))
+	for _, value := range o.DNSServers {
+		addr, err := netip.ParseAddr(value)
+		if err != nil || !addr.Is6() || addr.Is4In6() || addr.Zone() != "" {
+			return nil, fmt.Errorf("invalid inisix DNS server %q", value)
+		}
+		dnsServers = append(dnsServers, addr.Unmap())
+	}
+
+	plugin, err := upstream.New(storePath, dnsServers)
+	if err != nil {
+		return nil, err
+	}
+	return plugin, nil
 }
 
 func init() {

@@ -32,6 +32,7 @@ import (
 	ocihostutils "github.com/ironcore-dev/provider-utils/ociutils/host"
 	ociutils "github.com/ironcore-dev/provider-utils/ociutils/oci"
 	"github.com/ironcore-dev/provider-utils/osutils"
+	providerplugin "github.com/ironcore-dev/provider-utils/plugin"
 	hostutils "github.com/ironcore-dev/provider-utils/storeutils/host"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -194,15 +195,11 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	nicPlugin, nicPluginCleanup, err := opts.NicPlugin.NetworkInterfacePlugin(hostPaths)
+	nicPlugin, err := opts.NicPlugin.NetworkInterfacePlugin(hostPaths)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize network plugin")
 		return err
 	}
-	if nicPluginCleanup != nil {
-		defer nicPluginCleanup()
-	}
-
 	machineStore, err := hostutils.NewStore[*api.Machine](hostutils.Options[*api.Machine]{
 		Dir:            opts.MachineStoreDir,
 		NewFunc:        func() *api.Machine { return &api.Machine{} },
@@ -265,6 +262,16 @@ func Run(ctx context.Context, opts Options) error {
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
+	if starter, ok := nicPlugin.(providerplugin.NetworkInterfaceStarter); ok {
+		g.Go(func() error {
+			setupLog.Info("Starting network interface plugin", "Plugin", nicPlugin.Name())
+			if err := starter.Start(ctx); err != nil {
+				setupLog.Error(err, "failed to run network interface plugin")
+				return err
+			}
+			return nil
+		})
+	}
 	g.Go(func() error {
 		setupLog.Info("Starting oci cache")
 		if err := imgCache.Start(ctx); err != nil {
