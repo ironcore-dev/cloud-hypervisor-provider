@@ -10,7 +10,8 @@ import (
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	providerplugin "github.com/ironcore-dev/provider-utils/plugin"
 	"github.com/spf13/pflag"
-	upstream "go.moehl.dev/ironcore/inisix"
+	//TODO update once published
+	"go.moehl.dev/ironcore/inisix"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 )
 
@@ -38,7 +39,7 @@ func (o *inisixOptions) NetworkInterfacePlugin(_ host.Paths) (providerplugin.Net
 		dnsServers = append(dnsServers, addr.Unmap())
 	}
 
-	plugin, err := upstream.New(o.PrefixStore, dnsServers)
+	plugin, err := inisix.New(o.PrefixStore, dnsServers)
 	if err != nil {
 		return nil, err
 	}
