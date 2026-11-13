@@ -248,7 +248,7 @@ func (r *MachineReconciler) deleteMachine(ctx context.Context, log logr.Logger, 
 	log.V(1).Info("Delete NICs")
 	for _, nic := range machine.Spec.NetworkInterfaces {
 		log.V(2).Info("Delete NIC", "name", nic.Name)
-		if err := r.networkInterfacePlugin.Delete(ctx, nic.Name, machine.ID); err != nil {
+		if err := r.networkInterfacePlugin.Delete(ctx, networkinterface.ToPluginSpec(nic, ""), machine.ID); err != nil {
 			return fmt.Errorf("failed to delete nic %s: %w", nic.Name, err)
 		}
 	}
@@ -333,7 +333,7 @@ func (r *MachineReconciler) reconcileNics(ctx context.Context, log logr.Logger, 
 		if nic.DeletedAt != nil {
 			if status.State != api.NetworkInterfaceStateAttached {
 				log.V(2).Info("Delete detached  NIC", "name", nic.Name)
-				if err := plugin.Delete(ctx, nic.Name, machine.ID); err != nil {
+				if err := plugin.Delete(ctx, networkinterface.ToPluginSpec(nic, hostname), machine.ID); err != nil {
 					return fmt.Errorf("failed to delete NIC %s: %w", nic.Name, err)
 				}
 				continue
