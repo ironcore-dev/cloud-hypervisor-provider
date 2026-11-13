@@ -226,39 +226,36 @@ func getPluginStatus(nic *apinetv1alpha1.NetworkInterface) (*plugin.NetworkInter
 	}
 }
 
-func toNetipAddrs[S fmt.Stringer](ss []S) ([]netip.Addr, error) {
-	ret := make([]netip.Addr, 0, len(ss))
-	for i, s := range ss {
-		addr, err := netip.ParseAddr(s.String())
-		if err != nil {
-			return nil, fmt.Errorf("invalid IP at index %d: %w", i, err)
+func toNetipAddrs(ips []apinet.IP) ([]netip.Addr, error) {
+	ret := make([]netip.Addr, 0, len(ips))
+	for i, ip := range ips {
+		if !ip.IsValid() {
+			return nil, fmt.Errorf("invalid IP at index %d", i)
 		}
-		ret = append(ret, addr)
+		ret = append(ret, ip.Addr)
 	}
 	return ret, nil
 }
 
-func toNetipPrefixes[S fmt.Stringer](ss []S) ([]netip.Prefix, error) {
-	prefixes := make([]netip.Prefix, 0, len(ss))
-	for i, s := range ss {
-		prefix, err := netip.ParsePrefix(s.String())
-		if err != nil {
-			return nil, fmt.Errorf("invalid prefix at index %d: %w", i, err)
+func toNetipPrefixes(prefixes []apinet.IPPrefix) ([]netip.Prefix, error) {
+	ret := make([]netip.Prefix, 0, len(prefixes))
+	for i, prefix := range prefixes {
+		if !prefix.Prefix.IsValid() {
+			return nil, fmt.Errorf("invalid prefix at index %d", i)
 		}
-		prefixes = append(prefixes, prefix)
+		ret = append(ret, prefix.Prefix)
 	}
-	return prefixes, nil
+	return ret, nil
 }
 
 func virtualIP(nic *apinetv1alpha1.NetworkInterface) (netip.Addr, error) {
 	if len(nic.Status.PublicIPs) == 0 {
 		return netip.Addr{}, nil
 	}
-	addr, err := netip.ParseAddr(nic.Status.PublicIPs[0].String())
-	if err != nil {
-		return netip.Addr{}, fmt.Errorf("invalid virtual IP: %w", err)
+	if !nic.Status.PublicIPs[0].IsValid() {
+		return netip.Addr{}, fmt.Errorf("invalid virtual IP")
 	}
-	return addr, nil
+	return nic.Status.PublicIPs[0].Addr, nil
 }
 
 func getDeviceInfo(status *apinetv1alpha1.NetworkInterfaceStatus) (*plugin.PCI, *plugin.TAP, error) {
