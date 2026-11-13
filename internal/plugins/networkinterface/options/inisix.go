@@ -6,7 +6,6 @@ package options
 import (
 	"fmt"
 	"net/netip"
-	"os"
 
 	"github.com/ironcore-dev/cloud-hypervisor-provider/internal/host"
 	providerplugin "github.com/ironcore-dev/provider-utils/plugin"
@@ -25,19 +24,11 @@ func (o *inisixOptions) PluginName() string {
 }
 
 func (o *inisixOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&o.PrefixStore, "inisix-prefix-store", "", "Path to the inisix IPv6 prefix store")
+	fs.StringVar(&o.PrefixStore, "inisix-prefix-store", "/var/lib/inisix/prefixes.json", "Path to the inisix IPv6 prefix store")
 	fs.StringSliceVar(&o.DNSServers, "inisix-dns-server", nil, "IPv6 DNS server announced to guests; repeatable")
 }
 
 func (o *inisixOptions) NetworkInterfacePlugin(_ host.Paths) (providerplugin.NetworkInterface, error) {
-	storePath := o.PrefixStore
-	if storePath == "" {
-		storePath = os.Getenv("INISIX_PREFIX_STORE")
-	}
-	if storePath == "" {
-		storePath = "/var/lib/inisix/prefixes.json"
-	}
-
 	dnsServers := make([]netip.Addr, 0, len(o.DNSServers))
 	for _, value := range o.DNSServers {
 		addr, err := netip.ParseAddr(value)
@@ -47,7 +38,7 @@ func (o *inisixOptions) NetworkInterfacePlugin(_ host.Paths) (providerplugin.Net
 		dnsServers = append(dnsServers, addr.Unmap())
 	}
 
-	plugin, err := upstream.New(storePath, dnsServers)
+	plugin, err := upstream.New(o.PrefixStore, dnsServers)
 	if err != nil {
 		return nil, err
 	}
