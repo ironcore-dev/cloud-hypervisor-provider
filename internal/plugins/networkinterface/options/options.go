@@ -15,7 +15,7 @@ import (
 type TypeOptions interface {
 	PluginName() string
 	AddFlags(fs *pflag.FlagSet)
-	NetworkInterfacePlugin(host.Paths) (plugin.NetworkInterface, func(), error)
+	NetworkInterfacePlugin(host.Paths) (plugin.NetworkInterface, error)
 }
 
 type TypeOptionsRegistry struct {
@@ -110,18 +110,18 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	})
 }
 
-func (o *Options) NetworkInterfacePlugin(paths host.Paths) (plugin.NetworkInterface, func(), error) {
+func (o *Options) NetworkInterfacePlugin(paths host.Paths) (plugin.NetworkInterface, error) {
 	pluginOpts, err := o.registry.PluginTypeOptsByName(o.PluginName)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	nicPlugin, cleanup, err := pluginOpts.NetworkInterfacePlugin(paths)
+	nicPlugin, err := pluginOpts.NetworkInterfacePlugin(paths)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return nicPlugin, cleanup, nil
+	return nicPlugin, nil
 }
 
 var (

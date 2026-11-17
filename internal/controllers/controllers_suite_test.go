@@ -55,7 +55,7 @@ func (testNetworkInterfacePlugin) Apply(context.Context, *plugin.NetworkInterfac
 	return &plugin.NetworkInterfaceStatus{State: plugin.NetworkInterfaceStatePending}, nil
 }
 
-func (testNetworkInterfacePlugin) Delete(context.Context, string, string) error {
+func (testNetworkInterfacePlugin) Delete(context.Context, *plugin.NetworkInterfaceSpec, string) error {
 	return nil
 }
 

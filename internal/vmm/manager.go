@@ -406,8 +406,9 @@ func (m *Manager) Create(ctx context.Context, machine *api.Machine) error {
 			})
 		case api.NetworkInterfaceTAPType:
 			nets = append(nets, client.NetConfig{
-				Id:  new(getNicID(nic.Name)),
-				Tap: new(nic.Path),
+				Id:        new(getNicID(nic.Name)),
+				Tap:       new(nic.Path),
+				NumQueues: ptr.To(networkQueueCount(int(machine.Spec.Cpu))),
 			})
 		default:
 			return fmt.Errorf("unsupported network interface type %q for nic %s", nic.Type, nic.Name)
@@ -510,9 +511,17 @@ func (m *Manager) AttachNetworkInterface(ctx context.Context, instanceID string,
 			respBody = resp.Body
 		}
 	case api.NetworkInterfaceTAPType:
+		vmInfo, infoErr := m.getVM(ctx, instanceID)
+		if infoErr != nil {
+			return fmt.Errorf("failed to determine vcpu count for tap %s: %w", nic.Path, infoErr)
+		}
+		if vmInfo.Config.Cpus == nil {
+			return fmt.Errorf("cloud-hypervisor returned no cpu configuration for tap %s", nic.Path)
+		}
 		resp, addErr := apiClient.PutVmAddNetWithResponse(ctx, client.NetConfig{
-			Id:  new(getNicID(nic.Name)),
-			Tap: new(nic.Path),
+			Id:        new(getNicID(nic.Name)),
+			Tap:       new(nic.Path),
+			NumQueues: ptr.To(networkQueueCount(vmInfo.Config.Cpus.BootVcpus)),
 		})
 		if addErr != nil {
 			err = addErr
@@ -534,6 +543,15 @@ func (m *Manager) AttachNetworkInterface(ctx context.Context, instanceID string,
 	log.V(1).Info("Added device", "name", nic.Name)
 
 	return nil
+}
+
+// networkQueueCount returns the total virtqueue count for a virtio-net device.
+// Cloud Hypervisor uses one RX and one TX virtqueue per queue pair.
+func networkQueueCount(vcpus int) int {
+	if vcpus < 1 {
+		vcpus = 1
+	}
+	return vcpus * 2
 }
 
 func (m *Manager) DetachNetworkInterface(ctx context.Context, instanceID string, nicName string) error {

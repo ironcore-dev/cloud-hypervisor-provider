@@ -42,9 +42,9 @@ func (o *apinetOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&o.ApinetKubeconfig, "apinet-kubeconfig", "", "Path to the kubeconfig file for the apinet-cluster.")
 }
 
-func (o *apinetOptions) NetworkInterfacePlugin(paths host.Paths) (plugin.NetworkInterface, func(), error) {
+func (o *apinetOptions) NetworkInterfacePlugin(paths host.Paths) (plugin.NetworkInterface, error) {
 	if o.APInetNodeName == "" {
-		return nil, nil, fmt.Errorf("must specify apinet-node-name")
+		return nil, fmt.Errorf("must specify apinet-node-name")
 	}
 
 	// Check if apinetKubeconfig is provided
@@ -53,22 +53,22 @@ func (o *apinetOptions) NetworkInterfacePlugin(paths host.Paths) (plugin.Network
 	if o.ApinetKubeconfig != "" {
 		apinetCfg, err = clientcmd.BuildConfigFromFlags("", o.ApinetKubeconfig)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create config from apinet-kubeconfig: %w", err)
+			return nil, fmt.Errorf("failed to create config from apinet-kubeconfig: %w", err)
 		}
 	} else {
 		// assuming in-cluster config
 		apinetCfg, err = rest.InClusterConfig()
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create apinet in-cluster-config: %w", err)
+			return nil, fmt.Errorf("failed to create apinet in-cluster-config: %w", err)
 		}
 	}
 
 	apinetClient, err := client.New(apinetCfg, client.Options{Scheme: scheme})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to initialize api-net client: %w", err)
+		return nil, fmt.Errorf("failed to initialize api-net client: %w", err)
 	}
 
-	return apinet.NewPlugin(o.APInetNodeName, apinetClient, paths), nil, nil
+	return apinet.NewPlugin(o.APInetNodeName, apinetClient, paths), nil
 }
 
 func init() {

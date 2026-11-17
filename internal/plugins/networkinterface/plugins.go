@@ -59,8 +59,12 @@ func FromPluginStatus(name string, status *plugin.NetworkInterfaceStatus) (*api.
 		return nil, fmt.Errorf("network interface plugin returned unknown state %q", status.State)
 	}
 
-	if status.Prefixes.IsValid() {
-		result.Prefixes = []string{status.Prefixes.String()}
+	result.Prefixes = make([]string, len(status.Prefixes))
+	for i, prefix := range status.Prefixes {
+		if !prefix.IsValid() {
+			return nil, fmt.Errorf("network interface plugin returned invalid prefix at index %d", i)
+		}
+		result.Prefixes[i] = prefix.String()
 	}
 	if status.VirtualIp.IsValid() {
 		result.VirtualIP = status.VirtualIp.String()

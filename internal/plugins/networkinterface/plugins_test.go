@@ -36,7 +36,7 @@ func TestFromPluginStatusPCI(t *testing.T) {
 	status, err := FromPluginStatus("nic", &plugin.NetworkInterfaceStatus{
 		Handle:   "handle",
 		State:    plugin.NetworkInterfaceStateReady,
-		Prefixes: netip.MustParsePrefix("192.0.2.0/24"),
+		Prefixes: []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")},
 		Ips:      []netip.Addr{netip.MustParseAddr("192.0.2.10")},
 		PCI:      &plugin.PCI{BDF: "0000:00:01.0"},
 	})
