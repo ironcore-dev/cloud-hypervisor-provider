@@ -1,11 +1,16 @@
 name: cloud-hypervisor
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      ch_ref:
+        description: cloud-hypervisor git ref (commit/tag/branch) to build
+        required: true
+        default: main
 permissions:
   contents: read
 env:
   CH_REPO: cloud-hypervisor/cloud-hypervisor
-  CH_REF: 0ffe6c9148c7d3d4db53a30b965f4748577ef400
+  CH_REF: ${{ inputs.ch_ref }}
   RELEASE_TAG: cloud-hypervisor-fw_cfg
 jobs:
   build:
